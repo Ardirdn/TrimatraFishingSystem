@@ -220,6 +220,69 @@ local previousCameraCFrame = nil
 local previousCameraSubject = nil
 local previousMinZoom, previousMaxZoom = nil, nil
 
+-- ✅ THROW CAMERA LOOK-AT SYSTEM (LOCKED POSITION, ROTATION ONLY)
+local throwCamActive = false
+local throwCamConn = nil
+local throwCamTargetPos = nil
+local throwCamSavedPosition = nil  -- Posisi kamera yang di-lock saat throw
+
+function startThrowCameraLookAt(targetPos)
+	if throwCamActive then return end
+	throwCamActive = true
+	throwCamTargetPos = targetPos
+	
+	-- ✅ SAVE current camera position - this will be LOCKED
+	throwCamSavedPosition = camera.CFrame.Position
+	
+	print("📷 [CAMERA] Starting throw look-at (locked position)")
+	
+	-- Set camera to Scriptable so player can't move it
+	camera.CameraType = Enum.CameraType.Scriptable
+	
+	if throwCamConn then throwCamConn:Disconnect() end
+	
+	throwCamConn = RunService.RenderStepped:Connect(function()
+		if not throwCamActive then return end
+		if not throwCamSavedPosition then return end
+		
+		local floaterPart = currentFloater and (currentFloater:IsA("Model") and currentFloater.PrimaryPart or currentFloater)
+		
+		-- Use floater position if available, otherwise use target position
+		local lookTarget
+		if floaterPart then
+			lookTarget = floaterPart.Position
+		elseif throwCamTargetPos then
+			lookTarget = throwCamTargetPos
+		else
+			return
+		end
+		
+		-- Create CFrame: LOCKED SAVED POSITION, looking at floater
+		local targetCFrame = CFrame.new(throwCamSavedPosition, lookTarget)
+		
+		-- Smoothly rotate camera towards floater
+		camera.CFrame = camera.CFrame:Lerp(targetCFrame, 0.12)
+	end)
+end
+
+function stopThrowCameraLookAt()
+	if not throwCamActive then return end
+	throwCamActive = false
+	throwCamTargetPos = nil
+	throwCamSavedPosition = nil
+	
+	print("📷 [CAMERA] Stopping throw look-at effect")
+	
+	if throwCamConn then
+		throwCamConn:Disconnect()
+		throwCamConn = nil
+	end
+	
+	-- Restore to Custom mode so player can control camera again
+	camera.CameraType = Enum.CameraType.Custom
+	camera.CameraSubject = Character and Character:FindFirstChild("Humanoid") or nil
+end
+
 function startPullCamera(offsetDistance, offsetSide)
 	-- SIMPAN camera state sebelum cinematic!
 	previousCameraCFrame = camera.CFrame
@@ -689,6 +752,9 @@ end
 
 local function cleanupFishing()
 	print("CLEANUP: cleanupFishing() dipanggil pada", tick())
+
+	-- ✅ Stop throw camera look-at if active
+	stopThrowCameraLookAt()
 
 	-- Disconnect semua connection
 	if bobConnection then
@@ -1862,6 +1928,9 @@ local function throwFloater()
 	-- ✅ REPLICATION: Notify server IMMEDIATELY when throw starts (before animation)
 	notifyReplication("NotifyThrowFloater", startPos, targetPos, currentTool and currentTool.Name, floaterToUse, LineStyle, currentConfig.ThrowHeight)
 
+	-- ✅ START CAMERA LOOK-AT EFFECT
+	startThrowCameraLookAt(targetPos)
+
 	-- ANIMASI THROW: lakukan force cleanup orphan bobber SETELAH semua transition selesai
 	local throwDuration = 1.5
 	local elapsed = 0
@@ -1885,6 +1954,10 @@ local function throwFloater()
 			throwConnection:Disconnect()
 			isThrowing = false -- biar click lain bisa diterima di sesi berikutnya
 			isFloating = true -- bobbing dimulai (disable klik)
+			
+			-- ✅ STOP CAMERA LOOK-AT EFFECT (floater landed)
+			stopThrowCameraLookAt()
+			
 			startBobbing()
 			createBaitLine()
 

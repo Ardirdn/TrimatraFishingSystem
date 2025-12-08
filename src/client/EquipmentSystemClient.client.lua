@@ -1,11 +1,11 @@
 --[[
-    EQUIPMENT SYSTEM CLIENT
+    EQUIPMENT SYSTEM CLIENT (ADAPTIVE VERSION)
     Place in StarterPlayerScripts
     
     Handles Equipment UI for Rods & Floaters only
     Floating circular button on left side of screen
     
-    Style matched with Fish Collection UI
+    ✅ FULLY ADAPTIVE: Uses Scale + AspectRatioConstraint
 ]]
 
 local Players = game:GetService("Players")
@@ -27,7 +27,7 @@ end
 
 local getOwnedItemsFunc = rodShopRemotes:WaitForChild("GetOwnedItems", 5)
 local equipRodEvent = rodShopRemotes:WaitForChild("EquipRod", 5)
-local unequipRodEvent = rodShopRemotes:WaitForChild("UnequipRod", 5) -- NEW
+local unequipRodEvent = rodShopRemotes:WaitForChild("UnequipRod", 5)
 local equipFloaterEvent = rodShopRemotes:WaitForChild("EquipFloater", 5)
 local unequipFloaterEvent = rodShopRemotes:WaitForChild("UnequipFloater", 5)
 local equipmentChangedEvent = rodShopRemotes:FindFirstChild("EquipmentChanged")
@@ -62,7 +62,7 @@ local COLORS = {
 	Mythic = Color3.fromRGB(255, 50, 100)
 }
 
-print("✅ [EQUIPMENT CLIENT] Starting initialization...")
+print("✅ [EQUIPMENT CLIENT] Starting initialization (ADAPTIVE VERSION)...")
 
 -- ==================== HELPER FUNCTIONS ====================
 
@@ -72,9 +72,18 @@ local function createCorner(radius)
 	return corner
 end
 
+local function createScaledCorner(scale)
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(scale, 0)
+	return corner
+end
+
 local function getRarityColor(rarity)
 	return COLORS[rarity] or COLORS.Common
 end
+
+-- ==================== MOBILE DETECTION ====================
+local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 
 -- ==================== CREATE UI ====================
 
@@ -84,78 +93,63 @@ screenGui.ResetOnSpawn = false
 screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 screenGui.Parent = playerGui
 
--- ==================== MOBILE RESPONSIVE DETECTION ====================
-local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
-local screenSize = workspace.CurrentCamera.ViewportSize
-local isSmallScreen = screenSize.X < 800 or screenSize.Y < 600
+-- ==================== FLOATING BUTTON (IMAGE ICON - NO BACKGROUND) ====================
 
--- Responsive button size
-local buttonBaseSize = isMobile and 55 or 70
-local buttonHoverSize = isMobile and 62 or 80
-
--- ==================== FLOATING BUTTON (RESPONSIVE) ====================
-
-local floatingButton = Instance.new("TextButton")
+local floatingButton = Instance.new("ImageButton")
 floatingButton.Name = "EquipmentButton"
-floatingButton.Size = UDim2.new(0, buttonBaseSize, 0, buttonBaseSize)
-floatingButton.Position = UDim2.new(0, 10, 0.4, 0)
-floatingButton.BackgroundColor3 = COLORS.Accent
+floatingButton.Size = UDim2.new(0.1, 0, 0.1, 0) -- 10% of screen
+floatingButton.Position = UDim2.new(0.01, 0, 0.4, 0)
+floatingButton.BackgroundTransparency = 1 -- No background
 floatingButton.BorderSizePixel = 0
-floatingButton.Text = ""
-floatingButton.AutoButtonColor = false
+floatingButton.Image = "rbxassetid://139408214639598" -- Equipment icon
+floatingButton.ScaleType = Enum.ScaleType.Fit
 floatingButton.Parent = screenGui
 
-createCorner(buttonBaseSize/2).Parent = floatingButton
+-- Keep button square
+local buttonAspect = Instance.new("UIAspectRatioConstraint")
+buttonAspect.AspectRatio = 1
+buttonAspect.Parent = floatingButton
 
-local buttonStroke = Instance.new("UIStroke")
-buttonStroke.Color = Color3.fromRGB(80, 180, 240)
-buttonStroke.Thickness = isMobile and 2 or 3
-buttonStroke.Parent = floatingButton
+-- Size limits for button
+local buttonSizeConstraint = Instance.new("UISizeConstraint")
+buttonSizeConstraint.MinSize = Vector2.new(35, 35)
+buttonSizeConstraint.MaxSize = Vector2.new(60, 60)
+buttonSizeConstraint.Parent = floatingButton
 
-local buttonIcon = Instance.new("TextLabel")
-buttonIcon.Size = UDim2.new(1, 0, 0.6, 0)
-buttonIcon.Position = UDim2.new(0, 0, 0.05, 0)
-buttonIcon.BackgroundTransparency = 1
-buttonIcon.Font = Enum.Font.GothamBlack
-buttonIcon.Text = "🎣"
-buttonIcon.TextColor3 = COLORS.Text
-buttonIcon.TextSize = isMobile and 22 or 28
-buttonIcon.TextScaled = isMobile
-buttonIcon.Parent = floatingButton
-
+-- Text below icon
 local buttonText = Instance.new("TextLabel")
 buttonText.Size = UDim2.new(1, 0, 0.3, 0)
-buttonText.Position = UDim2.new(0, 0, 0.65, 0)
+buttonText.Position = UDim2.new(0, 0, 1, 2) -- Below the icon
 buttonText.BackgroundTransparency = 1
 buttonText.Font = Enum.Font.GothamBold
 buttonText.Text = "Equip"
-buttonText.TextColor3 = COLORS.Text
-buttonText.TextSize = isMobile and 8 or 10
-buttonText.TextScaled = isMobile
+buttonText.TextColor3 = Color3.fromRGB(255, 255, 255)
+buttonText.TextScaled = true
+buttonText.TextStrokeTransparency = 0.5
+buttonText.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
 buttonText.Parent = floatingButton
+
+local buttonTextConstraint = Instance.new("UITextSizeConstraint")
+buttonTextConstraint.MinTextSize = 8
+buttonTextConstraint.MaxTextSize = 12
+buttonTextConstraint.Parent = buttonText
 
 -- Hover effect (desktop only)
 if not isMobile then
 	floatingButton.MouseEnter:Connect(function()
-		TweenService:Create(floatingButton, TweenInfo.new(0.2), {Size = UDim2.new(0, buttonHoverSize, 0, buttonHoverSize)}):Play()
+		TweenService:Create(floatingButton, TweenInfo.new(0.2), {Size = UDim2.new(0.11, 0, 0.11, 0)}):Play()
 	end)
 
 	floatingButton.MouseLeave:Connect(function()
-		TweenService:Create(floatingButton, TweenInfo.new(0.2), {Size = UDim2.new(0, buttonBaseSize, 0, buttonBaseSize)}):Play()
+		TweenService:Create(floatingButton, TweenInfo.new(0.2), {Size = UDim2.new(0.1, 0, 0.1, 0)}):Play()
 	end)
 end
 
--- ==================== MAIN PANEL (SAME SIZE & STYLE AS FISH) ====================
-
--- Responsive panel size
-local panelWidth = isMobile and 0.95 or 0 -- Scale for mobile, fixed for desktop
-local panelWidthOffset = isMobile and 0 or 550
-local panelHeight = isMobile and 0.85 or 0
-local panelHeightOffset = isMobile and 0 or 600
+-- ==================== MAIN PANEL (FULLY ADAPTIVE) ====================
 
 local mainPanel = Instance.new("Frame")
 mainPanel.Name = "MainPanel"
-mainPanel.Size = UDim2.new(panelWidth, panelWidthOffset, panelHeight, panelHeightOffset)
+mainPanel.Size = UDim2.new(0.45, 0, 0.75, 0) -- 45% width, 75% height of screen
 mainPanel.Position = UDim2.new(0.5, 0, 0.5, 0)
 mainPanel.AnchorPoint = Vector2.new(0.5, 0.5)
 mainPanel.BackgroundColor3 = COLORS.Background
@@ -163,11 +157,17 @@ mainPanel.BorderSizePixel = 0
 mainPanel.Visible = false
 mainPanel.Parent = screenGui
 
--- Size constraint for mobile
-local sizeConstraint = Instance.new("UISizeConstraint")
-sizeConstraint.MinSize = Vector2.new(320, 400)
-sizeConstraint.MaxSize = Vector2.new(600, 700)
-sizeConstraint.Parent = mainPanel
+-- Maintain aspect ratio (550/600 = 0.917)
+local panelAspect = Instance.new("UIAspectRatioConstraint")
+panelAspect.AspectRatio = 1.2-- Width/Height
+panelAspect.DominantAxis = Enum.DominantAxis.Height
+panelAspect.Parent = mainPanel
+
+-- Size constraint for panel
+local panelSizeConstraint = Instance.new("UISizeConstraint")
+panelSizeConstraint.MinSize = Vector2.new(320, 350)
+panelSizeConstraint.MaxSize = Vector2.new(600, 650)
+panelSizeConstraint.Parent = mainPanel
 
 createCorner(16).Parent = mainPanel
 
@@ -176,10 +176,12 @@ mainStroke.Color = COLORS.Accent
 mainStroke.Thickness = 2
 mainStroke.Parent = mainPanel
 
--- Header (SAME STYLE AS FISH)
+-- ==================== HEADER (ADAPTIVE) ====================
+
 local headerFrame = Instance.new("Frame")
 headerFrame.Name = "Header"
-headerFrame.Size = UDim2.new(1, 0, 0, 55)
+headerFrame.Size = UDim2.new(1, 0, 0.09, 0) -- 9% of panel height
+headerFrame.Position = UDim2.new(0, 0, 0, 0)
 headerFrame.BackgroundColor3 = Color3.fromRGB(20, 35, 55)
 headerFrame.BorderSizePixel = 0
 headerFrame.Parent = mainPanel
@@ -187,74 +189,96 @@ headerFrame.Parent = mainPanel
 createCorner(16).Parent = headerFrame
 
 local titleLabel = Instance.new("TextLabel")
-titleLabel.Size = UDim2.new(0.6, 0, 1, 0)
-titleLabel.Position = UDim2.new(0, 15, 0, 0)
+titleLabel.Size = UDim2.new(0.7, 0, 0.8, 0)
+titleLabel.Position = UDim2.new(0.03, 0, 0.1, 0)
 titleLabel.BackgroundTransparency = 1
 titleLabel.Font = Enum.Font.GothamBlack
 titleLabel.Text = "🎣 EQUIPMENT"
 titleLabel.TextColor3 = COLORS.Text
-titleLabel.TextSize = 24
+titleLabel.TextScaled = true
 titleLabel.TextXAlignment = Enum.TextXAlignment.Left
 titleLabel.Parent = headerFrame
 
+-- Text size constraint for title
+local titleTextConstraint = Instance.new("UITextSizeConstraint")
+titleTextConstraint.MinTextSize = 12
+titleTextConstraint.MaxTextSize = 28
+titleTextConstraint.Parent = titleLabel
+
 local closeButton = Instance.new("TextButton")
-closeButton.Size = UDim2.new(0, 40, 0, 40)
-closeButton.Position = UDim2.new(1, -50, 0.5, 0)
-closeButton.AnchorPoint = Vector2.new(0, 0.5)
+closeButton.Size = UDim2.new(0.12, 0, 0.7, 0)
+closeButton.Position = UDim2.new(0.86, 0, 0.15, 0)
 closeButton.BackgroundColor3 = COLORS.Danger
 closeButton.BorderSizePixel = 0
 closeButton.Font = Enum.Font.GothamBold
 closeButton.Text = "X"
 closeButton.TextColor3 = COLORS.Text
-closeButton.TextSize = 18
+closeButton.TextScaled = true
 closeButton.Parent = headerFrame
+
+-- Keep close button square-ish
+local closeAspect = Instance.new("UIAspectRatioConstraint")
+closeAspect.AspectRatio = 1
+closeAspect.Parent = closeButton
 
 createCorner(8).Parent = closeButton
 
--- Tab Buttons (SAME STYLE AS FISH)
+-- ==================== TAB BUTTONS (ADAPTIVE) ====================
+
 local tabFrame = Instance.new("Frame")
 tabFrame.Name = "TabFrame"
-tabFrame.Size = UDim2.new(1, -30, 0, 40)
-tabFrame.Position = UDim2.new(0, 15, 0, 65)
+tabFrame.Size = UDim2.new(0.94, 0, 0.065, 0) -- 6.5% of panel height
+tabFrame.Position = UDim2.new(0.03, 0, 0.105, 0)
 tabFrame.BackgroundTransparency = 1
 tabFrame.Parent = mainPanel
 
 local tabLayout = Instance.new("UIListLayout")
 tabLayout.FillDirection = Enum.FillDirection.Horizontal
-tabLayout.Padding = UDim.new(0, 10)
+tabLayout.Padding = UDim.new(0.02, 0)
 tabLayout.Parent = tabFrame
 
 local rodsTabBtn = Instance.new("TextButton")
 rodsTabBtn.Name = "RodsTab"
-rodsTabBtn.Size = UDim2.new(0.5, -5, 1, 0)
+rodsTabBtn.Size = UDim2.new(0.49, 0, 1, 0)
 rodsTabBtn.BackgroundColor3 = COLORS.Accent
 rodsTabBtn.BorderSizePixel = 0
 rodsTabBtn.Font = Enum.Font.GothamBold
 rodsTabBtn.Text = "🎣 RODS"
 rodsTabBtn.TextColor3 = COLORS.Text
-rodsTabBtn.TextSize = 14
+rodsTabBtn.TextScaled = true
 rodsTabBtn.Parent = tabFrame
+
+local rodsTabTextConstraint = Instance.new("UITextSizeConstraint")
+rodsTabTextConstraint.MinTextSize = 10
+rodsTabTextConstraint.MaxTextSize = 16
+rodsTabTextConstraint.Parent = rodsTabBtn
 
 createCorner(8).Parent = rodsTabBtn
 
 local floatersTabBtn = Instance.new("TextButton")
 floatersTabBtn.Name = "FloatersTab"
-floatersTabBtn.Size = UDim2.new(0.5, -5, 1, 0)
+floatersTabBtn.Size = UDim2.new(0.49, 0, 1, 0)
 floatersTabBtn.BackgroundColor3 = COLORS.CardBg
 floatersTabBtn.BorderSizePixel = 0
 floatersTabBtn.Font = Enum.Font.GothamBold
 floatersTabBtn.Text = "🎈 FLOATERS"
 floatersTabBtn.TextColor3 = COLORS.SubText
-floatersTabBtn.TextSize = 14
+floatersTabBtn.TextScaled = true
 floatersTabBtn.Parent = tabFrame
+
+local floatersTabTextConstraint = Instance.new("UITextSizeConstraint")
+floatersTabTextConstraint.MinTextSize = 10
+floatersTabTextConstraint.MaxTextSize = 16
+floatersTabTextConstraint.Parent = floatersTabBtn
 
 createCorner(8).Parent = floatersTabBtn
 
--- Content Frame (SAME STYLE AS FISH - 4 columns)
+-- ==================== CONTENT FRAME (ADAPTIVE GRID) ====================
+
 local contentFrame = Instance.new("ScrollingFrame")
 contentFrame.Name = "ContentFrame"
-contentFrame.Size = UDim2.new(1, -30, 1, -180)
-contentFrame.Position = UDim2.new(0, 15, 0, 120)
+contentFrame.Size = UDim2.new(0.94, 0, 0.65, 0) -- 65% of panel height
+contentFrame.Position = UDim2.new(0.03, 0, 0.19, 0)
 contentFrame.BackgroundTransparency = 1
 contentFrame.ScrollBarThickness = 6
 contentFrame.ScrollBarImageColor3 = COLORS.Accent
@@ -262,23 +286,27 @@ contentFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
 contentFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
 contentFrame.Parent = mainPanel
 
--- SAME GRID AS FISH COLLECTION
+-- Adaptive Grid - 4 columns on desktop, 3 on mobile
+local columns = isMobile and 3 or 4
+local cellWidth = 1 / columns
+
 local contentGrid = Instance.new("UIGridLayout")
-contentGrid.CellSize = UDim2.new(0.25, -8, 0, 130)
-contentGrid.CellPadding = UDim2.new(0, 8, 0, 8)
+contentGrid.CellSize = UDim2.new(cellWidth, -8, 0, 130) -- Fixed height for cards
+contentGrid.CellPadding = UDim2.new(0.01, 0, 0, 8)
 contentGrid.SortOrder = Enum.SortOrder.LayoutOrder
 contentGrid.Parent = contentFrame
 
 local contentPadding = Instance.new("UIPadding")
-contentPadding.PaddingTop = UDim.new(0, 5)
-contentPadding.PaddingBottom = UDim.new(0, 10)
+contentPadding.PaddingTop = UDim.new(0.01, 0)
+contentPadding.PaddingBottom = UDim.new(0.02, 0)
 contentPadding.Parent = contentFrame
 
--- Bottom Stats Bar (SAME STYLE AS FISH)
+-- ==================== STATS BAR (ADAPTIVE) ====================
+
 local statsBar = Instance.new("Frame")
 statsBar.Name = "StatsBar"
-statsBar.Size = UDim2.new(1, -30, 0, 45)
-statsBar.Position = UDim2.new(0, 15, 1, -55)
+statsBar.Size = UDim2.new(0.94, 0, 0.075, 0) -- 7.5% of panel height
+statsBar.Position = UDim2.new(0.03, 0, 0.91, 0)
 statsBar.BackgroundColor3 = Color3.fromRGB(20, 35, 55)
 statsBar.BorderSizePixel = 0
 statsBar.Parent = mainPanel
@@ -287,17 +315,22 @@ createCorner(10).Parent = statsBar
 
 local equippedLabel = Instance.new("TextLabel")
 equippedLabel.Name = "EquippedInfo"
-equippedLabel.Size = UDim2.new(1, -30, 1, 0)
-equippedLabel.Position = UDim2.new(0, 15, 0, 0)
+equippedLabel.Size = UDim2.new(0.94, 0, 0.85, 0)
+equippedLabel.Position = UDim2.new(0.03, 0, 0.075, 0)
 equippedLabel.BackgroundTransparency = 1
 equippedLabel.Font = Enum.Font.GothamBold
 equippedLabel.Text = "🎣 Equipped: Loading..."
 equippedLabel.TextColor3 = COLORS.Success
-equippedLabel.TextSize = 16
+equippedLabel.TextScaled = true
 equippedLabel.TextXAlignment = Enum.TextXAlignment.Left
 equippedLabel.Parent = statsBar
 
--- ==================== ITEM CARD CREATION (SAME STYLE AS FISH CARDS) ====================
+local equippedTextConstraint = Instance.new("UITextSizeConstraint")
+equippedTextConstraint.MinTextSize = 10
+equippedTextConstraint.MaxTextSize = 18
+equippedTextConstraint.Parent = equippedLabel
+
+-- ==================== ITEM CARD CREATION (ADAPTIVE) ====================
 
 local function createRodCard(rodId, isEquipped)
 	local rodConfig = RodShopConfig.GetRodById(rodId)
@@ -315,10 +348,10 @@ local function createRodCard(rodId, isEquipped)
 	cardStroke.Thickness = isEquipped and 3 or 2
 	cardStroke.Parent = card
 	
-	-- Image Container (SAME AS FISH)
+	-- Image Container (adaptive within card)
 	local imageContainer = Instance.new("Frame")
-	imageContainer.Size = UDim2.new(1, -10, 0, 60)
-	imageContainer.Position = UDim2.new(0, 5, 0, 5)
+	imageContainer.Size = UDim2.new(0.9, 0, 0.45, 0)
+	imageContainer.Position = UDim2.new(0.05, 0, 0.04, 0)
 	imageContainer.BackgroundColor3 = Color3.fromRGB(15, 25, 35)
 	imageContainer.Parent = card
 	
@@ -337,54 +370,69 @@ local function createRodCard(rodId, isEquipped)
 	-- Equipped badge
 	if isEquipped then
 		local badge = Instance.new("TextLabel")
-		badge.Size = UDim2.new(0, 50, 0, 18)
-		badge.Position = UDim2.new(1, -5, 0, 5)
+		badge.Size = UDim2.new(0.4, 0, 0.3, 0)
+		badge.Position = UDim2.new(0.95, 0, 0.05, 0)
 		badge.AnchorPoint = Vector2.new(1, 0)
 		badge.BackgroundColor3 = COLORS.Success
 		badge.Font = Enum.Font.GothamBold
 		badge.Text = "✓"
 		badge.TextColor3 = COLORS.Text
-		badge.TextSize = 12
+		badge.TextScaled = true
 		badge.Parent = imageContainer
 		createCorner(4).Parent = badge
 	end
 	
-	-- Name (SAME STYLE AS FISH)
+	-- Name
 	local nameLabel = Instance.new("TextLabel")
-	nameLabel.Size = UDim2.new(1, -6, 0, 16)
-	nameLabel.Position = UDim2.new(0, 3, 0, 68)
+	nameLabel.Size = UDim2.new(0.94, 0, 0.12, 0)
+	nameLabel.Position = UDim2.new(0.03, 0, 0.52, 0)
 	nameLabel.BackgroundTransparency = 1
 	nameLabel.Font = Enum.Font.GothamBold
 	nameLabel.Text = rodConfig.DisplayName
 	nameLabel.TextColor3 = COLORS.Text
-	nameLabel.TextSize = 10
+	nameLabel.TextScaled = true
 	nameLabel.TextTruncate = Enum.TextTruncate.AtEnd
 	nameLabel.TextXAlignment = Enum.TextXAlignment.Center
 	nameLabel.Parent = card
 	
-	-- Rarity (SAME STYLE AS FISH)
+	local nameTextConstraint = Instance.new("UITextSizeConstraint")
+	nameTextConstraint.MinTextSize = 8
+	nameTextConstraint.MaxTextSize = 12
+	nameTextConstraint.Parent = nameLabel
+	
+	-- Rarity
 	local rarityLabel = Instance.new("TextLabel")
-	rarityLabel.Size = UDim2.new(1, -6, 0, 14)
-	rarityLabel.Position = UDim2.new(0, 3, 0, 84)
+	rarityLabel.Size = UDim2.new(0.94, 0, 0.1, 0)
+	rarityLabel.Position = UDim2.new(0.03, 0, 0.65, 0)
 	rarityLabel.BackgroundTransparency = 1
 	rarityLabel.Font = Enum.Font.Gotham
 	rarityLabel.Text = rodConfig.Rarity:upper()
 	rarityLabel.TextColor3 = getRarityColor(rodConfig.Rarity)
-	rarityLabel.TextSize = 9
+	rarityLabel.TextScaled = true
 	rarityLabel.TextXAlignment = Enum.TextXAlignment.Center
 	rarityLabel.Parent = card
 	
-	-- Action Button (Equip/Unequip) - SAME AS FLOATER
+	local rarityTextConstraint = Instance.new("UITextSizeConstraint")
+	rarityTextConstraint.MinTextSize = 7
+	rarityTextConstraint.MaxTextSize = 10
+	rarityTextConstraint.Parent = rarityLabel
+	
+	-- Action Button
 	local actionBtn = Instance.new("TextButton")
-	actionBtn.Size = UDim2.new(1, -10, 0, 22)
-	actionBtn.Position = UDim2.new(0, 5, 1, -26)
+	actionBtn.Size = UDim2.new(0.9, 0, 0.15, 0)
+	actionBtn.Position = UDim2.new(0.05, 0, 0.8, 0)
 	actionBtn.BackgroundColor3 = isEquipped and COLORS.Danger or COLORS.Accent
 	actionBtn.BorderSizePixel = 0
 	actionBtn.Font = Enum.Font.GothamBold
 	actionBtn.Text = isEquipped and "Unequip" or "Equip"
 	actionBtn.TextColor3 = COLORS.Text
-	actionBtn.TextSize = 10
+	actionBtn.TextScaled = true
 	actionBtn.Parent = card
+	
+	local actionTextConstraint = Instance.new("UITextSizeConstraint")
+	actionTextConstraint.MinTextSize = 8
+	actionTextConstraint.MaxTextSize = 12
+	actionTextConstraint.Parent = actionBtn
 	
 	createCorner(5).Parent = actionBtn
 	
@@ -416,10 +464,10 @@ local function createFloaterCard(floaterId, isEquipped)
 	cardStroke.Thickness = isEquipped and 3 or 2
 	cardStroke.Parent = card
 	
-	-- Image Container (SAME AS FISH)
+	-- Image Container
 	local imageContainer = Instance.new("Frame")
-	imageContainer.Size = UDim2.new(1, -10, 0, 60)
-	imageContainer.Position = UDim2.new(0, 5, 0, 5)
+	imageContainer.Size = UDim2.new(0.9, 0, 0.45, 0)
+	imageContainer.Position = UDim2.new(0.05, 0, 0.04, 0)
 	imageContainer.BackgroundColor3 = Color3.fromRGB(15, 25, 35)
 	imageContainer.Parent = card
 	
@@ -438,54 +486,69 @@ local function createFloaterCard(floaterId, isEquipped)
 	-- Equipped badge
 	if isEquipped then
 		local badge = Instance.new("TextLabel")
-		badge.Size = UDim2.new(0, 50, 0, 18)
-		badge.Position = UDim2.new(1, -5, 0, 5)
+		badge.Size = UDim2.new(0.4, 0, 0.3, 0)
+		badge.Position = UDim2.new(0.95, 0, 0.05, 0)
 		badge.AnchorPoint = Vector2.new(1, 0)
 		badge.BackgroundColor3 = COLORS.Success
 		badge.Font = Enum.Font.GothamBold
 		badge.Text = "✓"
 		badge.TextColor3 = COLORS.Text
-		badge.TextSize = 12
+		badge.TextScaled = true
 		badge.Parent = imageContainer
 		createCorner(4).Parent = badge
 	end
 	
-	-- Name (SAME STYLE AS FISH)
+	-- Name
 	local nameLabel = Instance.new("TextLabel")
-	nameLabel.Size = UDim2.new(1, -6, 0, 16)
-	nameLabel.Position = UDim2.new(0, 3, 0, 68)
+	nameLabel.Size = UDim2.new(0.94, 0, 0.12, 0)
+	nameLabel.Position = UDim2.new(0.03, 0, 0.52, 0)
 	nameLabel.BackgroundTransparency = 1
 	nameLabel.Font = Enum.Font.GothamBold
 	nameLabel.Text = floaterConfig.DisplayName
 	nameLabel.TextColor3 = COLORS.Text
-	nameLabel.TextSize = 10
+	nameLabel.TextScaled = true
 	nameLabel.TextTruncate = Enum.TextTruncate.AtEnd
 	nameLabel.TextXAlignment = Enum.TextXAlignment.Center
 	nameLabel.Parent = card
 	
-	-- Rarity (SAME STYLE AS FISH)
+	local nameTextConstraint = Instance.new("UITextSizeConstraint")
+	nameTextConstraint.MinTextSize = 8
+	nameTextConstraint.MaxTextSize = 12
+	nameTextConstraint.Parent = nameLabel
+	
+	-- Rarity
 	local rarityLabel = Instance.new("TextLabel")
-	rarityLabel.Size = UDim2.new(1, -6, 0, 14)
-	rarityLabel.Position = UDim2.new(0, 3, 0, 84)
+	rarityLabel.Size = UDim2.new(0.94, 0, 0.1, 0)
+	rarityLabel.Position = UDim2.new(0.03, 0, 0.65, 0)
 	rarityLabel.BackgroundTransparency = 1
 	rarityLabel.Font = Enum.Font.Gotham
 	rarityLabel.Text = floaterConfig.Rarity:upper()
 	rarityLabel.TextColor3 = getRarityColor(floaterConfig.Rarity)
-	rarityLabel.TextSize = 9
+	rarityLabel.TextScaled = true
 	rarityLabel.TextXAlignment = Enum.TextXAlignment.Center
 	rarityLabel.Parent = card
 	
-	-- Action Button (Equip/Unequip)
+	local rarityTextConstraint = Instance.new("UITextSizeConstraint")
+	rarityTextConstraint.MinTextSize = 7
+	rarityTextConstraint.MaxTextSize = 10
+	rarityTextConstraint.Parent = rarityLabel
+	
+	-- Action Button
 	local actionBtn = Instance.new("TextButton")
-	actionBtn.Size = UDim2.new(1, -10, 0, 22)
-	actionBtn.Position = UDim2.new(0, 5, 1, -26)
+	actionBtn.Size = UDim2.new(0.9, 0, 0.15, 0)
+	actionBtn.Position = UDim2.new(0.05, 0, 0.8, 0)
 	actionBtn.BackgroundColor3 = isEquipped and COLORS.Danger or COLORS.Accent
 	actionBtn.BorderSizePixel = 0
 	actionBtn.Font = Enum.Font.GothamBold
 	actionBtn.Text = isEquipped and "Unequip" or "Equip"
 	actionBtn.TextColor3 = COLORS.Text
-	actionBtn.TextSize = 10
+	actionBtn.TextScaled = true
 	actionBtn.Parent = card
+	
+	local actionTextConstraint = Instance.new("UITextSizeConstraint")
+	actionTextConstraint.MinTextSize = 8
+	actionTextConstraint.MaxTextSize = 12
+	actionTextConstraint.Parent = actionBtn
 	
 	createCorner(5).Parent = actionBtn
 	
@@ -627,4 +690,4 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	end
 end)
 
-print("✅ [EQUIPMENT CLIENT] Loaded - Press G or click button to open")
+print("✅ [EQUIPMENT CLIENT] Loaded (ADAPTIVE VERSION) - Press G or click button to open")

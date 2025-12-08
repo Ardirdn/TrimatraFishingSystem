@@ -18,6 +18,7 @@ local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
 local FishConfig = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("FishConfig"))
+local SoundConfig = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("SoundConfig"))
 
 -- Wait for remotes
 local remoteFolder = ReplicatedStorage:WaitForChild("FishermanShopRemotes", 10)
@@ -992,6 +993,8 @@ confirmSellBtn.MouseButton1Click:Connect(function()
 	local _, count = getCartTotal()
 	if count > 0 and sellSelectedFishEvent then
 		sellSelectedFishEvent:FireServer(cart)
+		-- ✅ Play transaction sound
+		SoundConfig.PlayLocalSound("Transaction")
 		cart = {}
 		updateCartInfo()
 		cartPanel.Visible = false
@@ -1003,6 +1006,8 @@ end)
 sellAllBtn.MouseButton1Click:Connect(function()
 	if sellAllFishEvent then
 		sellAllFishEvent:FireServer()
+		-- ✅ Play transaction sound
+		SoundConfig.PlayLocalSound("Transaction")
 		cart = {}
 		updateCartInfo()
 		task.delay(0.5, fetchInventory)

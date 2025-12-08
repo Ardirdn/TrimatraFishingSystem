@@ -12,12 +12,14 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local MarketplaceService = game:GetService("MarketplaceService")
+local ProximityPromptService = game:GetService("ProximityPromptService")
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
-local Icon = require(ReplicatedStorage:WaitForChild("Icon"))
+-- No longer using TopbarPlus, using ProximityPrompt instead
 local RodShopConfig = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("RodShopConfig"))
+local SoundConfig = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("SoundConfig"))
 
 -- Wait for remotes
 local remoteFolder = ReplicatedStorage:WaitForChild("RodShopRemotes", 10)
@@ -519,36 +521,71 @@ function fetchShopData()
 	end
 end
 
--- ==================== TOPBAR ICON ====================
+-- ==================== SHOP STATE ====================
 
-local rodShopIcon = Icon.new()
-	:setLabel("Rod Shop")
-	:setImage(6764432293) -- Fishing rod icon
-	:setOrder(5)
-	:bindEvent("selected", function()
-		mainPanel.Visible = true
-		fetchShopData()
+local isShopOpen = false
+
+local function openShop()
+	if isShopOpen then return end
+	isShopOpen = true
+	mainPanel.Visible = true
+	fetchShopData()
+	print("🛒 [ROD SHOP] Shop opened")
+end
+
+local function closeShop()
+	if not isShopOpen then return end
+	isShopOpen = false
+	mainPanel.Visible = false
+	print("🛒 [ROD SHOP] Shop closed")
+end
+
+-- ==================== CLOSE BUTTON ====================
+
+-- Find close button if exists
+local closeButton = mainPanel:FindFirstChild("CloseButton") or mainPanel:FindFirstChild("CloseBtn")
+if closeButton then
+	closeButton.MouseButton1Click:Connect(function()
+		closeShop()
 	end)
-	:bindEvent("deselected", function()
-		mainPanel.Visible = false
-	end)
+end
 
--- ==================== KEYBIND ====================
+-- ==================== PROXIMITY PROMPT SETUP ====================
 
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-	if gameProcessed then return end
-
-	if input.KeyCode == Enum.KeyCode.R then
-		if mainPanel.Visible then
-			mainPanel.Visible = false
-			rodShopIcon:deselect()
-		else
-			mainPanel.Visible = true
-			rodShopIcon:select()
-			fetchShopData()
-		end
+local function setupProximityPrompt()
+	local equipmentShop = workspace:FindFirstChild("EquipmentShop")
+	
+	if not equipmentShop then
+		warn("[ROD SHOP CLIENT] EquipmentShop part not found in Workspace!")
+		-- Try again later
+		task.delay(5, setupProximityPrompt)
+		return
 	end
-end)
+	
+	-- Find or create proximity prompt
+	local prompt = equipmentShop:FindFirstChildOfClass("ProximityPrompt")
+	if not prompt then
+		prompt = Instance.new("ProximityPrompt")
+		prompt.ObjectText = "Equipment Shop"
+		prompt.ActionText = "Browse Rods & Floaters"
+		prompt.HoldDuration = 0.3
+		prompt.MaxActivationDistance = 10
+		prompt.RequiresLineOfSight = false
+		prompt.Parent = equipmentShop
+	end
+	
+	prompt.Triggered:Connect(function(playerWhoTriggered)
+		if playerWhoTriggered == player then
+			if isShopOpen then
+				closeShop()
+			else
+				openShop()
+			end
+		end
+	end)
+	
+	print("✅ [ROD SHOP CLIENT] Proximity prompt setup complete!")
+end
 
 -- ==================== INITIAL STATE ====================
 
@@ -567,6 +604,8 @@ end)
 if shopUpdatedEvent then
 	shopUpdatedEvent.OnClientEvent:Connect(function(itemType, itemId)
 		print("🔄 [ROD SHOP CLIENT] Shop updated! Type:", itemType, "ID:", itemId)
+		-- ✅ Play transaction sound
+		SoundConfig.PlayLocalSound("Transaction")
 		fetchShopData()
 	end)
 end
@@ -579,4 +618,8 @@ if equipmentChangedEvent then
 	end)
 end
 
-print("✅ [ROD SHOP CLIENT] Loaded using StarterGui template")
+-- ==================== INITIALIZE PROXIMITY PROMPT ====================
+
+task.spawn(setupProximityPrompt)
+
+print("✅ [ROD SHOP CLIENT] Loaded - Go to EquipmentShop to browse rods & floaters!")

@@ -13,8 +13,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
--- Require modules
-local Icon = require(ReplicatedStorage:WaitForChild("Icon"))
+-- No longer using TopbarPlus
 local MusicConfig = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("MusicConfig"))
 
 -- RemoteEvents for Favorites
@@ -119,23 +118,75 @@ local queueScroll = queueListPanel:WaitForChild("Queue")
 
 print("✅ [MUSIC PLAYER] All UI references loaded")
 
--- ==================== CREATE TOPBAR ICON ====================
-local musicIcon = Icon.new()
-	:setLabel("Music")
-	:setImage("rbxassetid://YOUR_ICON_ID") -- Replace with your icon
-	:setOrder(1)
+-- ==================== FLOATING BUTTON (RIGHT SIDE - IMAGE ICON) ====================
 
--- Toggle main panel
-musicIcon:bindEvent("selected", function()
-	mainPanel.Visible = true
-	widgetPanel.Visible = false
-end)
+local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 
-musicIcon:bindEvent("deselected", function()
-	mainPanel.Visible = false
-	-- ✅ Show widget when main panel closes, reset hidden state
-	widgetPanel.Visible = true
-	-- Reset manually hidden flag so widget stays visible
+local floatingButton = Instance.new("ImageButton")
+floatingButton.Name = "MusicButton"
+floatingButton.Size = UDim2.new(0.1, 0, 0.1, 0) -- 10% of screen
+floatingButton.Position = UDim2.new(0.99, 0, 0.5, 0) -- Right side, same Y as Fish on left
+floatingButton.AnchorPoint = Vector2.new(1, 0) -- Anchor to right
+floatingButton.BackgroundTransparency = 1 -- No background
+floatingButton.BorderSizePixel = 0
+floatingButton.Image = "rbxassetid://97131431743901" -- Music icon
+floatingButton.ScaleType = Enum.ScaleType.Fit
+floatingButton.Parent = screenGui
+
+-- Keep button square
+local buttonAspect = Instance.new("UIAspectRatioConstraint")
+buttonAspect.AspectRatio = 1
+buttonAspect.Parent = floatingButton
+
+-- Size limits
+local buttonSizeConstraint = Instance.new("UISizeConstraint")
+buttonSizeConstraint.MinSize = Vector2.new(35, 35)
+buttonSizeConstraint.MaxSize = Vector2.new(60, 60)
+buttonSizeConstraint.Parent = floatingButton
+
+-- Text below icon
+local buttonText = Instance.new("TextLabel")
+buttonText.Size = UDim2.new(1, 0, 0.3, 0)
+buttonText.Position = UDim2.new(0, 0, 1, 2) -- Below the icon
+buttonText.BackgroundTransparency = 1
+buttonText.Font = Enum.Font.GothamBold
+buttonText.Text = "Music"
+buttonText.TextColor3 = Color3.fromRGB(255, 255, 255)
+buttonText.TextScaled = true
+buttonText.TextStrokeTransparency = 0.5
+buttonText.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+buttonText.Parent = floatingButton
+
+local buttonTextConstraint = Instance.new("UITextSizeConstraint")
+buttonTextConstraint.MinTextSize = 8
+buttonTextConstraint.MaxTextSize = 12
+buttonTextConstraint.Parent = buttonText
+
+-- State tracking
+local isMusicPanelOpen = false
+
+-- Hover effect (desktop only)
+if not isMobile then
+	floatingButton.MouseEnter:Connect(function()
+		TweenService:Create(floatingButton, TweenInfo.new(0.2), {Size = UDim2.new(0.11, 0, 0.11, 0)}):Play()
+	end)
+
+	floatingButton.MouseLeave:Connect(function()
+		TweenService:Create(floatingButton, TweenInfo.new(0.2), {Size = UDim2.new(0.1, 0, 0.1, 0)}):Play()
+	end)
+end
+
+-- Toggle panel on click
+floatingButton.MouseButton1Click:Connect(function()
+	if isMusicPanelOpen then
+		mainPanel.Visible = false
+		widgetPanel.Visible = true
+		isMusicPanelOpen = false
+	else
+		mainPanel.Visible = true
+		widgetPanel.Visible = false
+		isMusicPanelOpen = true
+	end
 end)
 
 -- Initialize panels visibility

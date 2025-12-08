@@ -11,7 +11,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
-local Icon = require(ReplicatedStorage:WaitForChild("Icon"))
+-- No longer using TopbarPlus
 local RedeemConfig = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("RedeemConfig"))
 local TitleConfig = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("TitleConfig"))
 
@@ -52,10 +52,10 @@ screenGui.Name = "RedeemGui"
 screenGui.ResetOnSpawn = false
 screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 screenGui.DisplayOrder = 50
-screenGui.Enabled = false
+screenGui.Enabled = true -- ✅ Always enabled so button is visible
 screenGui.Parent = playerGui
 
--- Main Panel
+-- Main Panel (hidden by default, shown when button clicked)
 local mainPanel = Instance.new("Frame")
 mainPanel.Name = "MainPanel"
 mainPanel.Size = UDim2.new(0.5, 0, 0.85, 0)
@@ -63,7 +63,7 @@ mainPanel.Position = UDim2.new(0.5, 0, 1.5, 0)
 mainPanel.AnchorPoint = Vector2.new(0.5, 0.5)
 mainPanel.BackgroundColor3 = COLORS.Background
 mainPanel.BorderSizePixel = 0
-mainPanel.Visible = false
+mainPanel.Visible = false -- ✅ Panel hidden, not entire GUI
 mainPanel.Parent = screenGui
 
 createCorner(15).Parent = mainPanel
@@ -628,7 +628,7 @@ end
 
 
 local function showPanel()
-	screenGui.Enabled = true
+	-- screenGui always enabled, just show panel
 	mainPanel.Visible = true
 	mainPanel.Position = UDim2.new(0.5, 0, 1.5, 0)
 
@@ -647,7 +647,7 @@ local function hidePanel()
 	slideDown:Play()
 	slideDown.Completed:Connect(function()
 		mainPanel.Visible = false
-		screenGui.Enabled = false
+		-- Don't disable screenGui, button needs to stay visible
 	end)
 end
 
@@ -782,18 +782,81 @@ createCodeButton.MouseButton1Click:Connect(function()
 	selectedReward = nil
 end)
 
--- ==================== TOPBAR ICON ====================
-local redeemIcon = Icon.new()
-	:setImage("rbxassetid://11419703997")
-	:setLabel("Redeem")
-	:bindEvent("selected", function()
-		showPanel()
+-- ==================== FLOATING BUTTON (RIGHT SIDE - IMAGE ICON) ====================
+
+local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+
+local floatingButton = Instance.new("ImageButton")
+floatingButton.Name = "RedeemButton"
+floatingButton.Size = UDim2.new(0.1, 0, 0.1, 0) -- 10% of screen
+floatingButton.Position = UDim2.new(0.99, 0, 0.4, 0) -- Right side, same Y as Equipment on left
+floatingButton.AnchorPoint = Vector2.new(1, 0) -- Anchor to right
+floatingButton.BackgroundTransparency = 1 -- No background
+floatingButton.BorderSizePixel = 0
+floatingButton.Image = "rbxassetid://94928289017301" -- Using Music icon temporarily
+floatingButton.ScaleType = Enum.ScaleType.Fit
+floatingButton.Parent = screenGui
+
+-- Keep button square
+local buttonAspect = Instance.new("UIAspectRatioConstraint")
+buttonAspect.AspectRatio = 1
+buttonAspect.Parent = floatingButton
+
+-- Size limits
+local buttonSizeConstraint = Instance.new("UISizeConstraint")
+buttonSizeConstraint.MinSize = Vector2.new(35, 35)
+buttonSizeConstraint.MaxSize = Vector2.new(60, 60)
+buttonSizeConstraint.Parent = floatingButton
+
+-- Text below icon
+local buttonText = Instance.new("TextLabel")
+buttonText.Size = UDim2.new(1, 0, 0.3, 0)
+buttonText.Position = UDim2.new(0, 0, 1, 2) -- Below the icon
+buttonText.BackgroundTransparency = 1
+buttonText.Font = Enum.Font.GothamBold
+buttonText.Text = "Redeem"
+buttonText.TextColor3 = Color3.fromRGB(255, 255, 255)
+buttonText.TextScaled = true
+buttonText.TextStrokeTransparency = 0.5
+buttonText.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+buttonText.Parent = floatingButton
+
+local buttonTextConstraint = Instance.new("UITextSizeConstraint")
+buttonTextConstraint.MinTextSize = 8
+buttonTextConstraint.MaxTextSize = 12
+buttonTextConstraint.Parent = buttonText
+
+-- State tracking
+local isOpen = false
+
+-- Hover effect (desktop only)
+if not isMobile then
+	floatingButton.MouseEnter:Connect(function()
+		TweenService:Create(floatingButton, TweenInfo.new(0.2), {Size = UDim2.new(0.11, 0, 0.11, 0)}):Play()
 	end)
-	:bindEvent("deselected", function()
+
+	floatingButton.MouseLeave:Connect(function()
+		TweenService:Create(floatingButton, TweenInfo.new(0.2), {Size = UDim2.new(0.1, 0, 0.1, 0)}):Play()
+	end)
+end
+
+-- Toggle panel on click
+floatingButton.MouseButton1Click:Connect(function()
+	if isOpen then
 		hidePanel()
-	end)
+		isOpen = false
+	else
+		showPanel()
+		isOpen = true
+	end
+end)
+
+-- Also close when close button is pressed
+closeBtn.MouseButton1Click:Connect(function()
+	isOpen = false
+end)
 
 -- ==================== INITIALIZATION ====================
 checkAdmin()
 
-print("✅ [REDEEM CLIENT] System loaded")
+print("✅ [REDEEM CLIENT] System loaded (Floating Button)")

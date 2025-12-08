@@ -10,6 +10,7 @@ local HttpService = game:GetService("HttpService")
 
 local DataHandler = require(script.Parent.DataHandler)
 local NotificationService = require(script.Parent.NotificationServer)
+local TitleServer = require(script.Parent.TItleServer) -- ✅ ADDED: For broadcasting title after redeem
 local TitleConfig = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("TitleConfig"))
 local ShopConfig = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("ShopConfig"))
 
@@ -316,13 +317,19 @@ redeemCodeEvent.OnServerEvent:Connect(function(player, codeString)
 			return
 		end
 
-		-- Give title
-		if not DataHandler:ArrayContains(player, "OwnedTitles", rewardValue) then
-			DataHandler:AddToArray(player, "OwnedTitles", rewardValue)
+		-- ✅ FIXED: Give title to UnlockedTitles (TitleServer uses this field, NOT OwnedTitles)
+		if not DataHandler:ArrayContains(player, "UnlockedTitles", rewardValue) then
+			DataHandler:AddToArray(player, "UnlockedTitles", rewardValue)
 		end
 
 		DataHandler:Set(player, "EquippedTitle", rewardValue)
 		rewardMessage = string.format("Title: %s", rewardValue)
+
+		-- ✅ ADDED: Broadcast title to update display immediately
+		task.spawn(function()
+			task.wait(0.5)
+			TitleServer:BroadcastTitle(player, rewardValue)
+		end)
 
 	elseif rewardType == "Aura" then
 		-- Give aura

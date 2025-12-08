@@ -17,8 +17,12 @@ local defaultMinZoom = Players.LocalPlayer.CameraMinZoomDistance
 local defaultMaxZoom = Players.LocalPlayer.CameraMaxZoomDistance
 
 local FishingRodConfig = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("FishingRod.config"))
+local SoundConfig = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("SoundConfig"))
 local FishingRodsFolder = ReplicatedStorage:WaitForChild("FishingRods")
 local FloatersFolder = FishingRodsFolder:WaitForChild("Floaters")
+
+-- Sound state tracking
+local currentPullingSound = nil
 
 -- RodShop Remote for getting equipped floater
 local rodShopRemotes = ReplicatedStorage:WaitForChild("RodShopRemotes", 5)
@@ -1277,6 +1281,16 @@ local function startPulling()
 
 	-- ✅ REPLICATION: Notify server that pulling started
 	notifyReplication("NotifyStartPulling")
+	
+	-- ✅ Play fish bite sound at floater position (3D)
+	local floaterPos = currentFloater:IsA("Model") and currentFloater.PrimaryPart.Position or currentFloater.Position
+	SoundConfig.PlaySoundAtPosition("FishBite", floaterPos)
+	
+	-- ✅ Start looping pulling sound (will stop when pulling ends)
+	if currentPullingSound then
+		SoundConfig.StopSound(currentPullingSound)
+	end
+	currentPullingSound = SoundConfig.PlayLocalSound("Pulling")
 
 	-- Tampilkan UI PullFrame dan jalankan tapTap pulling
 	pullFrame.Visible = true
@@ -1423,6 +1437,12 @@ local function startPulling()
 
 			stopCameraShake()
 			stopPullCamera()
+			
+			-- ✅ Stop pulling sound when pulling ends
+			if currentPullingSound then
+				SoundConfig.StopSound(currentPullingSound)
+				currentPullingSound = nil
+			end
 
 			isPulling = false
 			isFishing = false
@@ -1473,6 +1493,13 @@ local function startPulling()
 
 			stopCameraShake()
 			stopPullCamera()
+			
+			-- ✅ Stop pulling sound and play fish caught sound
+			if currentPullingSound then
+				SoundConfig.StopSound(currentPullingSound)
+				currentPullingSound = nil
+			end
+			SoundConfig.PlayLocalSound("FishCaught")
 
 			isPulling = false
 			isFishing = false
@@ -1819,6 +1846,9 @@ local function throwFloater()
 		idleAnimation:Stop()
 	end
 
+	-- ✅ Play throw sound IMMEDIATELY (before animation wait)
+	SoundConfig.PlayLocalSound("Throw")
+
 	if throwAnimation then
 		throwAnimation:Play()
 		local animLength = throwAnimation.Length or 1.0
@@ -1954,6 +1984,9 @@ local function throwFloater()
 			throwConnection:Disconnect()
 			isThrowing = false -- biar click lain bisa diterima di sesi berikutnya
 			isFloating = true -- bobbing dimulai (disable klik)
+			
+			-- ✅ Play water splash sound at floater position
+			SoundConfig.PlaySoundAtPosition("WaterSplash", targetPos)
 			
 			-- ✅ STOP CAMERA LOOK-AT EFFECT (floater landed)
 			stopThrowCameraLookAt()
@@ -2101,7 +2134,7 @@ end
 
 _G.toggleAfkMode = toggleAfkMode
 
--- ✅ CREATE AFK BUTTON (Mobile Compatible)
+-- ✅ CREATE AFK BUTTON (IMAGE ICON - NO BACKGROUND)
 local function createAfkButton()
 	local playerGui = Player:WaitForChild("PlayerGui")
 	
@@ -2122,7 +2155,6 @@ local function createAfkButton()
 	end
 	
 	local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
-	local buttonSize = isMobile and 50 or 60
 	
 	local screenGui = Instance.new("ScreenGui")
 	screenGui.Name = "AfkButtonGUI"
@@ -2130,54 +2162,55 @@ local function createAfkButton()
 	screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 	screenGui.Parent = playerGui
 	
-	local afkButton = Instance.new("TextButton")
+	-- Use ImageButton with custom icon instead of TextButton
+	local afkButton = Instance.new("ImageButton")
 	afkButton.Name = "AfkButton"
-	afkButton.Size = UDim2.new(0, buttonSize, 0, buttonSize)
-	afkButton.Position = UDim2.new(0, 10, 0.6, 0)
-	afkButton.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+	afkButton.Size = UDim2.new(0.1, 0, 0.1, 0) -- 10% of screen
+	afkButton.Position = UDim2.new(0.01, 0, 0.6, 0)
+	afkButton.BackgroundTransparency = 1 -- No background
 	afkButton.BorderSizePixel = 0
-	afkButton.Text = ""
-	afkButton.AutoButtonColor = false
+	afkButton.Image = "rbxassetid://98033273507939" -- AFK icon
+	afkButton.ScaleType = Enum.ScaleType.Fit
 	afkButton.Parent = screenGui
 	
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, buttonSize/2)
-	corner.Parent = afkButton
+	-- Keep button square
+	local aspect = Instance.new("UIAspectRatioConstraint")
+	aspect.AspectRatio = 1
+	aspect.Parent = afkButton
 	
-	local stroke = Instance.new("UIStroke")
-	stroke.Color = Color3.fromRGB(100, 100, 100)
-	stroke.Thickness = isMobile and 2 or 3
-	stroke.Parent = afkButton
+	-- Size limits
+	local sizeConstraint = Instance.new("UISizeConstraint")
+	sizeConstraint.MinSize = Vector2.new(35, 35)
+	sizeConstraint.MaxSize = Vector2.new(60, 60)
+	sizeConstraint.Parent = afkButton
 	
-	local icon = Instance.new("TextLabel")
-	icon.Size = UDim2.new(1, 0, 0.6, 0)
-	icon.Position = UDim2.new(0, 0, 0.05, 0)
-	icon.BackgroundTransparency = 1
-	icon.Font = Enum.Font.GothamBlack
-	icon.Text = "🤖"
-	icon.TextColor3 = Color3.fromRGB(255, 255, 255)
-	icon.TextSize = isMobile and 20 or 24
-	icon.TextScaled = isMobile
-	icon.Parent = afkButton
-	
+	-- Text below icon
 	local label = Instance.new("TextLabel")
-	label.Size = UDim2.new(1, 0, 0.35, 0)
-	label.Position = UDim2.new(0, 0, 0.6, 0)
+	label.Size = UDim2.new(1, 0, 0.3, 0)
+	label.Position = UDim2.new(0, 0, 1, 2) -- Below the icon
 	label.BackgroundTransparency = 1
 	label.Font = Enum.Font.GothamBold
 	label.Text = "AFK"
 	label.TextColor3 = Color3.fromRGB(255, 255, 255)
-	label.TextSize = isMobile and 8 or 10
-	label.TextScaled = isMobile
+	label.TextScaled = true
+	label.TextStrokeTransparency = 0.5
+	label.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
 	label.Parent = afkButton
+	
+	local labelTextConstraint = Instance.new("UITextSizeConstraint")
+	labelTextConstraint.MinTextSize = 8
+	labelTextConstraint.MaxTextSize = 12
+	labelTextConstraint.Parent = label
 	
 	local function updateButtonVisual()
 		if afkMode then
-			afkButton.BackgroundColor3 = Color3.fromRGB(0, 180, 80)
-			stroke.Color = Color3.fromRGB(0, 220, 100)
+			-- Active state - add green tint overlay or change image color
+			afkButton.ImageColor3 = Color3.fromRGB(0, 255, 100) -- Green tint
+			label.TextColor3 = Color3.fromRGB(0, 255, 100)
 		else
-			afkButton.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
-			stroke.Color = Color3.fromRGB(100, 100, 100)
+			-- Inactive state - normal color
+			afkButton.ImageColor3 = Color3.fromRGB(255, 255, 255) -- Normal
+			label.TextColor3 = Color3.fromRGB(255, 255, 255)
 		end
 	end
 	
@@ -2187,7 +2220,7 @@ local function createAfkButton()
 		updateButtonVisual()
 	end)
 	
-	print("✅ [FISHING] AFK Button created")
+	print("✅ [FISHING] AFK Button created (Image Icon)")
 	return screenGui
 end
 

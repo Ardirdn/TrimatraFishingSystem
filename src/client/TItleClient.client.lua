@@ -235,6 +235,12 @@ end
 
 -- Update title display (NEW STRUCTURE v2)
 local function updateTitleDisplay(character, titleName)
+	-- ✅ FIXED: Early return if titleName is nil or empty
+	if not titleName or titleName == "" then
+		warn("[TITLE CLIENT] updateTitleDisplay called with nil/empty titleName")
+		return
+	end
+	
 	local head = character:FindFirstChild("Head")
 	if not head then return end
 
@@ -304,14 +310,14 @@ local function updateTitleDisplay(character, titleName)
 		end
 	else
 		-- Fallback if title not found
-		warn(string.format("[TITLE CLIENT] Unknown title: %s", titleName))
+		warn(string.format("[TITLE CLIENT] Unknown title: %s", tostring(titleName)))
 		titleBadge.Visible = false
 		if mainStroke then
 			mainStroke.Color = Color3.fromRGB(80, 90, 110)
 		end
 	end
 
-	print(string.format("✅ [TITLE CLIENT] Updated title display for %s: %s", character.Name, titleName))
+	print(string.format("✅ [TITLE CLIENT] Updated title display for %s: %s", character.Name, tostring(titleName)))
 end
 
 
@@ -419,10 +425,12 @@ local function setupPlayerTitle(targetPlayer)
 				return getTitleFunc:InvokeServer(targetPlayer)
 			end)
 
-			if success and title then
+			if success and title and title ~= "" then
 				playerTitles[targetPlayer] = title
-				updateTitleDisplay(character, title)
-				print(string.format("📥 [TITLE CLIENT] Got title for %s: %s", targetPlayer.Name, title))
+				if character and character.Parent then
+					updateTitleDisplay(character, title)
+				end
+				print(string.format("📥 [TITLE CLIENT] Got title for %s: %s", targetPlayer.Name, tostring(title)))
 			end
 		end)
 	end
@@ -435,22 +443,86 @@ end
 
 -- Listen for title updates (self)
 updateTitleEvent.OnClientEvent:Connect(function(titleName)
-	print(string.format("📥 [TITLE CLIENT] Received title update for SELF: %s", titleName or "None"))
-	playerTitles[player] = titleName
-	if player.Character and titleName then -- ✅ Only update if titleName exists
-		updateTitleDisplay(player.Character, titleName)
+	-- ✅ FIXED: Better nil handling
+	local titleStr = titleName and tostring(titleName) or "None"
+	print(string.format("📥 [TITLE CLIENT] Received title update for SELF: %s", titleStr))
+	
+	if titleName and titleName ~= "" then
+		playerTitles[player] = titleName
+		if player.Character then
+			updateTitleDisplay(player.Character, titleName)
+		end
+	else
+		-- Handle unequip (nil title)
+		playerTitles[player] = nil
+		if player.Character then
+			local head = player.Character:FindFirstChild("Head")
+			if head then
+				local billboard = head:FindFirstChild("TitleBillboard")
+				if billboard then
+					local mainFrame = billboard:FindFirstChild("MainFrame")
+					if mainFrame then
+						local titleBadge = mainFrame:FindFirstChild("TitleBadge")
+						if titleBadge then
+							titleBadge.Visible = false
+						end
+						local mainStroke = mainFrame:FindFirstChild("MainStroke")
+						if mainStroke then
+							mainStroke.Color = Color3.fromRGB(80, 90, 110)
+						end
+					end
+				end
+			end
+		end
 	end
 end)
 
 
 -- Listen for other players' title updates
 updateOtherPlayerTitleEvent.OnClientEvent:Connect(function(targetPlayer, titleName)
-	print(string.format("📥 [TITLE CLIENT] Received title update for %s: %s", targetPlayer.Name, titleName))
+	-- ✅ FIXED: Comprehensive nil checks to prevent string.format error
+	if not targetPlayer then
+		warn("[TITLE CLIENT] Received nil targetPlayer in title update")
+		return
+	end
+	
+	-- ✅ FIXED: Ensure targetPlayer is still valid (not left the game)
+	if not targetPlayer:IsA("Player") or not targetPlayer.Parent then
+		warn("[TITLE CLIENT] Target player is invalid or left the game")
+		return
+	end
+	
+	local titleStr = titleName and tostring(titleName) or "None"
+	print(string.format("📥 [TITLE CLIENT] Received title update for %s: %s", targetPlayer.Name, titleStr))
 
-	if targetPlayer and targetPlayer ~= player then
-		playerTitles[targetPlayer] = titleName
-		if targetPlayer.Character then
-			updateTitleDisplay(targetPlayer.Character, titleName)
+	if targetPlayer ~= player then
+		if titleName and titleName ~= "" then
+			playerTitles[targetPlayer] = titleName
+			if targetPlayer.Character then
+				updateTitleDisplay(targetPlayer.Character, titleName)
+			end
+		else
+			-- Handle unequip (nil title) for other player
+			playerTitles[targetPlayer] = nil
+			if targetPlayer.Character then
+				local head = targetPlayer.Character:FindFirstChild("Head")
+				if head then
+					local billboard = head:FindFirstChild("TitleBillboard")
+					if billboard then
+						local mainFrame = billboard:FindFirstChild("MainFrame")
+						if mainFrame then
+							local titleBadge = mainFrame:FindFirstChild("TitleBadge")
+							if titleBadge then
+								titleBadge.Visible = false
+							end
+							local mainStroke = mainFrame:FindFirstChild("MainStroke")
+							if mainStroke then
+								mainStroke.Color = Color3.fromRGB(80, 90, 110)
+							end
+						end
+					end
+				end
+			end
 		end
 	end
 end)

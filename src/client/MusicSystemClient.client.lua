@@ -118,76 +118,84 @@ local queueScroll = queueListPanel:WaitForChild("Queue")
 
 print("✅ [MUSIC PLAYER] All UI references loaded")
 
--- ==================== FLOATING BUTTON (RIGHT SIDE - IMAGE ICON) ====================
+-- ==================== USE HUD BUTTON TEMPLATE (RIGHT SIDE) ====================
 
 local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 
-local floatingButton = Instance.new("ImageButton")
-floatingButton.Name = "MusicButton"
-floatingButton.Size = UDim2.new(0.1, 0, 0.1, 0) -- 10% of screen
-floatingButton.Position = UDim2.new(0.99, 0, 0.5, 0) -- Right side, same Y as Fish on left
-floatingButton.AnchorPoint = Vector2.new(1, 0) -- Anchor to right
-floatingButton.BackgroundTransparency = 1 -- No background
-floatingButton.BorderSizePixel = 0
-floatingButton.Image = "rbxassetid://97131431743901" -- Music icon
-floatingButton.ScaleType = Enum.ScaleType.Fit
-floatingButton.Parent = screenGui
+local hudGui = playerGui:WaitForChild("HUD", 10)
+local rightFrame = hudGui and hudGui:FindFirstChild("Right")
+local buttonTemplate = rightFrame and rightFrame:FindFirstChild("ButtonTemplate")
 
--- Keep button square
-local buttonAspect = Instance.new("UIAspectRatioConstraint")
-buttonAspect.AspectRatio = 1
-buttonAspect.Parent = floatingButton
-
--- Size limits
-local buttonSizeConstraint = Instance.new("UISizeConstraint")
-buttonSizeConstraint.MinSize = Vector2.new(35, 35)
-buttonSizeConstraint.MaxSize = Vector2.new(60, 60)
-buttonSizeConstraint.Parent = floatingButton
-
--- Text below icon
-local buttonText = Instance.new("TextLabel")
-buttonText.Size = UDim2.new(1, 0, 0.3, 0)
-buttonText.Position = UDim2.new(0, 0, 1, 2) -- Below the icon
-buttonText.BackgroundTransparency = 1
-buttonText.Font = Enum.Font.GothamBold
-buttonText.Text = "Music"
-buttonText.TextColor3 = Color3.fromRGB(255, 255, 255)
-buttonText.TextScaled = true
-buttonText.TextStrokeTransparency = 0.5
-buttonText.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
-buttonText.Parent = floatingButton
-
-local buttonTextConstraint = Instance.new("UITextSizeConstraint")
-buttonTextConstraint.MinTextSize = 8
-buttonTextConstraint.MaxTextSize = 12
-buttonTextConstraint.Parent = buttonText
-
--- State tracking
+local floatingButton = nil
 local isMusicPanelOpen = false
 
--- Hover effect (desktop only)
-if not isMobile then
-	floatingButton.MouseEnter:Connect(function()
-		TweenService:Create(floatingButton, TweenInfo.new(0.2), {Size = UDim2.new(0.11, 0, 0.11, 0)}):Play()
-	end)
-
-	floatingButton.MouseLeave:Connect(function()
-		TweenService:Create(floatingButton, TweenInfo.new(0.2), {Size = UDim2.new(0.1, 0, 0.1, 0)}):Play()
-	end)
+if buttonTemplate then
+	-- ✅ Hide the original template
+	buttonTemplate.Visible = false
+	
+	-- Clone the template
+	local buttonContainer = buttonTemplate:Clone()
+	buttonContainer.Name = "MusicButton"
+	buttonContainer.Visible = true
+	buttonContainer.LayoutOrder = 2 -- Second button on right
+	buttonContainer.BackgroundTransparency = 1 -- ✅ Transparent container
+	buttonContainer.Parent = rightFrame
+	
+	-- Get references
+	floatingButton = buttonContainer:FindFirstChild("ImageButton")
+	local buttonText = buttonContainer:FindFirstChild("TextLabel")
+	
+	-- Set button properties
+	if floatingButton then
+		floatingButton.Image = "rbxassetid://97131431743901" -- Music icon
+		floatingButton.BackgroundTransparency = 1 -- ✅ Transparent button
+	end
+	
+	if buttonText then
+		buttonText.Text = "Music"
+	end
+	
+	print("✅ [MUSIC] Using HUD template button (Right)")
+else
+	-- Fallback: Create button manually if template not found
+	warn("[MUSIC] HUD template not found, creating button manually")
+	
+	floatingButton = Instance.new("ImageButton")
+	floatingButton.Name = "MusicButton"
+	floatingButton.Size = UDim2.new(0.1, 0, 0.1, 0)
+	floatingButton.Position = UDim2.new(0.99, 0, 0.5, 0)
+	floatingButton.AnchorPoint = Vector2.new(1, 0)
+	floatingButton.BackgroundTransparency = 1
+	floatingButton.BorderSizePixel = 0
+	floatingButton.Image = "rbxassetid://97131431743901"
+	floatingButton.ScaleType = Enum.ScaleType.Fit
+	floatingButton.Parent = screenGui
+	
+	local buttonText = Instance.new("TextLabel")
+	buttonText.Size = UDim2.new(1, 0, 0.3, 0)
+	buttonText.Position = UDim2.new(0, 0, 1, 2)
+	buttonText.BackgroundTransparency = 1
+	buttonText.Font = Enum.Font.GothamBold
+	buttonText.Text = "Music"
+	buttonText.TextColor3 = Color3.fromRGB(255, 255, 255)
+	buttonText.TextScaled = true
+	buttonText.Parent = floatingButton
 end
 
 -- Toggle panel on click
-floatingButton.MouseButton1Click:Connect(function()
-	if isMusicPanelOpen then
-		mainPanel.Visible = false
-		widgetPanel.Visible = true
-		isMusicPanelOpen = false
-	else
-		mainPanel.Visible = true
-		widgetPanel.Visible = false
-		isMusicPanelOpen = true
-	end
-end)
+if floatingButton then
+	floatingButton.MouseButton1Click:Connect(function()
+		if isMusicPanelOpen then
+			mainPanel.Visible = false
+			widgetPanel.Visible = true
+			isMusicPanelOpen = false
+		else
+			mainPanel.Visible = true
+			widgetPanel.Visible = false
+			isMusicPanelOpen = true
+		end
+	end)
+end
 
 -- Initialize panels visibility
 mainPanel.Visible = false
@@ -206,6 +214,114 @@ if widgetCloseButton then
 		print("🎵 [MUSIC] Widget hidden - open music menu to show again")
 	end)
 end
+
+-- ==================== PANEL NAVIGATION HANDLERS ====================
+
+-- Function to close all music panels
+local function closeMusicPlayer()
+	mainPanel.Visible = false
+	myLibraryPanel.Visible = false
+	playlistPopupPanel.Visible = false
+	queuePanel.Visible = false
+	widgetPanel.Visible = true
+	isMusicPanelOpen = false
+	print("🎵 [MUSIC] Music player closed")
+end
+
+-- Function to show main panel (from sub-panels)
+local function showMainPanel()
+	mainPanel.Visible = true
+	myLibraryPanel.Visible = false
+	playlistPopupPanel.Visible = false
+	queuePanel.Visible = false
+	print("🎵 [MUSIC] Returned to main panel")
+end
+
+-- Function to show library panel
+local function showLibraryPanel()
+	mainPanel.Visible = false
+	myLibraryPanel.Visible = true
+	playlistPopupPanel.Visible = false
+	queuePanel.Visible = false
+	print("🎵 [MUSIC] Showing library panel")
+end
+
+-- ==================== MAIN PANEL - Close Button ====================
+local mainHeader = mainPanel:FindFirstChild("Header")
+if mainHeader then
+	local mainCloseButton = mainHeader:FindFirstChild("CloseButton")
+	if mainCloseButton then
+		mainCloseButton.MouseButton1Click:Connect(function()
+			closeMusicPlayer()
+		end)
+		print("✅ [MUSIC] MainPanel CloseButton connected")
+	end
+end
+
+-- ==================== MY LIBRARY PANEL - Back & Close Buttons ====================
+local libraryHeader = myLibraryPanel:FindFirstChild("Header")
+if libraryHeader then
+	local libraryBackButton = libraryHeader:FindFirstChild("BackButton")
+	if libraryBackButton then
+		libraryBackButton.MouseButton1Click:Connect(function()
+			showMainPanel()
+		end)
+		print("✅ [MUSIC] MyLibraryPanel BackButton connected")
+	end
+	
+	local libraryCloseButton = libraryHeader:FindFirstChild("CloseButton")
+	if libraryCloseButton then
+		libraryCloseButton.MouseButton1Click:Connect(function()
+			closeMusicPlayer()
+		end)
+		print("✅ [MUSIC] MyLibraryPanel CloseButton connected")
+	end
+end
+
+-- ==================== PLAYLIST POPUP PANEL - Back & Close Buttons ====================
+local popupHeaderRef = playlistPopupPanel:FindFirstChild("Header")
+if popupHeaderRef then
+	local popupBack = popupHeaderRef:FindFirstChild("BackButton")
+	if popupBack then
+		popupBack.MouseButton1Click:Connect(function()
+			playlistPopupPanel.Visible = false
+			myLibraryPanel.Visible = true
+			print("🎵 [MUSIC] Returned to library from playlist popup")
+		end)
+		print("✅ [MUSIC] PlaylistPopupPanel BackButton connected")
+	end
+	
+	local popupClose = popupHeaderRef:FindFirstChild("CloseButton")
+	if popupClose then
+		popupClose.MouseButton1Click:Connect(function()
+			closeMusicPlayer()
+		end)
+		print("✅ [MUSIC] PlaylistPopupPanel CloseButton connected")
+	end
+end
+
+-- ==================== QUEUE PANEL - Back & Close Buttons ====================
+local queueHeader = queuePanel:FindFirstChild("Header")
+if queueHeader then
+	local queueBackButton = queueHeader:FindFirstChild("BackButton")
+	if queueBackButton then
+		queueBackButton.MouseButton1Click:Connect(function()
+			queuePanel.Visible = false
+			mainPanel.Visible = true
+			print("🎵 [MUSIC] Returned to main from queue")
+		end)
+		print("✅ [MUSIC] QueuePanel BackButton connected")
+	end
+	
+	local queueCloseButton = queueHeader:FindFirstChild("CloseButton")
+	if queueCloseButton then
+		queueCloseButton.MouseButton1Click:Connect(function()
+			closeMusicPlayer()
+		end)
+		print("✅ [MUSIC] QueuePanel CloseButton connected")
+	end
+end
+
 
 -- ==================== MUSIC PLAYER LOGIC ====================
 local currentSound = nil

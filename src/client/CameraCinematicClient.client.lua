@@ -31,59 +31,69 @@ screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 screenGui.DisplayOrder = 100 -- High priority so button always visible
 screenGui.Parent = playerGui
 
--- ==================== FLOATING BUTTON (RIGHT SIDE - IMAGE ICON) ====================
+-- ==================== USE HUD BUTTON TEMPLATE (RIGHT SIDE) ====================
 
 local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 
-local floatingButton = Instance.new("ImageButton")
-floatingButton.Name = "CameraButton"
-floatingButton.Size = UDim2.new(0.1, 0, 0.1, 0) -- 10% of screen
-floatingButton.Position = UDim2.new(0.99, 0, 0.6, 0) -- Right side, below Music
-floatingButton.AnchorPoint = Vector2.new(1, 0) -- Anchor to right
-floatingButton.BackgroundTransparency = 1 -- No background
-floatingButton.BorderSizePixel = 0
-floatingButton.Image = "rbxassetid://139242732181104" -- Camera Cinematic icon
-floatingButton.ScaleType = Enum.ScaleType.Fit
-floatingButton.Parent = screenGui
+local hudGui = playerGui:WaitForChild("HUD", 10)
+local rightFrame = hudGui and hudGui:FindFirstChild("Right")
+local buttonTemplate = rightFrame and rightFrame:FindFirstChild("ButtonTemplate")
 
--- Keep button square
-local buttonAspect = Instance.new("UIAspectRatioConstraint")
-buttonAspect.AspectRatio = 1
-buttonAspect.Parent = floatingButton
+local floatingButton = nil
+local buttonText = nil
+local buttonContainer = nil
 
--- Size limits
-local buttonSizeConstraint = Instance.new("UISizeConstraint")
-buttonSizeConstraint.MinSize = Vector2.new(35, 35)
-buttonSizeConstraint.MaxSize = Vector2.new(60, 60)
-buttonSizeConstraint.Parent = floatingButton
-
--- Text below icon
-local buttonText = Instance.new("TextLabel")
-buttonText.Size = UDim2.new(1, 0, 0.3, 0)
-buttonText.Position = UDim2.new(0, 0, 1, 2) -- Below the icon
-buttonText.BackgroundTransparency = 1
-buttonText.Font = Enum.Font.GothamBold
-buttonText.Text = "Photo"
-buttonText.TextColor3 = Color3.fromRGB(255, 255, 255)
-buttonText.TextScaled = true
-buttonText.TextStrokeTransparency = 0.5
-buttonText.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
-buttonText.Parent = floatingButton
-
-local buttonTextConstraint = Instance.new("UITextSizeConstraint")
-buttonTextConstraint.MinTextSize = 8
-buttonTextConstraint.MaxTextSize = 12
-buttonTextConstraint.Parent = buttonText
-
--- Hover effect (desktop only)
-if not isMobile then
-	floatingButton.MouseEnter:Connect(function()
-		TweenService:Create(floatingButton, TweenInfo.new(0.2), {Size = UDim2.new(0.11, 0, 0.11, 0)}):Play()
-	end)
-
-	floatingButton.MouseLeave:Connect(function()
-		TweenService:Create(floatingButton, TweenInfo.new(0.2), {Size = UDim2.new(0.1, 0, 0.1, 0)}):Play()
-	end)
+if buttonTemplate then
+	-- ✅ Hide the original template
+	buttonTemplate.Visible = false
+	
+	-- Clone the template
+	buttonContainer = buttonTemplate:Clone()
+	buttonContainer.Name = "PhotoButton"
+	buttonContainer.Visible = true
+	buttonContainer.LayoutOrder = 3 -- Third button on right
+	buttonContainer.BackgroundTransparency = 1 -- ✅ Transparent container
+	buttonContainer.Parent = rightFrame
+	
+	-- Get references
+	floatingButton = buttonContainer:FindFirstChild("ImageButton")
+	buttonText = buttonContainer:FindFirstChild("TextLabel")
+	
+	-- Set button properties
+	if floatingButton then
+		floatingButton.Image = "rbxassetid://139242732181104" -- Camera icon
+		floatingButton.BackgroundTransparency = 1 -- ✅ Transparent button
+	end
+	
+	if buttonText then
+		buttonText.Text = "Photo"
+	end
+	
+	print("✅ [CAMERA] Using HUD template button (Right)")
+else
+	-- Fallback: Create button manually if template not found
+	warn("[CAMERA] HUD template not found, creating button manually")
+	
+	floatingButton = Instance.new("ImageButton")
+	floatingButton.Name = "CameraButton"
+	floatingButton.Size = UDim2.new(0.1, 0, 0.1, 0)
+	floatingButton.Position = UDim2.new(0.99, 0, 0.6, 0)
+	floatingButton.AnchorPoint = Vector2.new(1, 0)
+	floatingButton.BackgroundTransparency = 1
+	floatingButton.BorderSizePixel = 0
+	floatingButton.Image = "rbxassetid://139242732181104"
+	floatingButton.ScaleType = Enum.ScaleType.Fit
+	floatingButton.Parent = screenGui
+	
+	buttonText = Instance.new("TextLabel")
+	buttonText.Size = UDim2.new(1, 0, 0.3, 0)
+	buttonText.Position = UDim2.new(0, 0, 1, 2)
+	buttonText.BackgroundTransparency = 1
+	buttonText.Font = Enum.Font.GothamBold
+	buttonText.Text = "Photo"
+	buttonText.TextColor3 = Color3.fromRGB(255, 255, 255)
+	buttonText.TextScaled = true
+	buttonText.Parent = floatingButton
 end
 
 -- ==================== CINEMATIC MODE INDICATOR ====================
@@ -183,8 +193,12 @@ local function toggleCinematicMode()
 	if isCinematicMode then
 		hideAllUI()
 		modeIndicator.Visible = true
-		floatingButton.ImageColor3 = Color3.fromRGB(100, 255, 100) -- Green tint when active
-		buttonText.TextColor3 = Color3.fromRGB(100, 255, 100)
+		if floatingButton then
+			floatingButton.ImageColor3 = Color3.fromRGB(100, 255, 100) -- Green tint when active
+		end
+		if buttonText then
+			buttonText.TextColor3 = Color3.fromRGB(100, 255, 100)
+		end
 		
 		-- Hide indicator after 3 seconds
 		task.delay(3, function()
@@ -200,16 +214,22 @@ local function toggleCinematicMode()
 		modeIndicator.Visible = false
 		modeIndicator.BackgroundTransparency = 0.5
 		modeIndicator.TextTransparency = 0
-		floatingButton.ImageColor3 = Color3.fromRGB(255, 255, 255) -- Normal color
-		buttonText.TextColor3 = Color3.fromRGB(255, 255, 255)
+		if floatingButton then
+			floatingButton.ImageColor3 = Color3.fromRGB(255, 255, 255) -- Normal color
+		end
+		if buttonText then
+			buttonText.TextColor3 = Color3.fromRGB(255, 255, 255)
+		end
 	end
 end
 
 -- ==================== BUTTON CLICK ====================
 
-floatingButton.MouseButton1Click:Connect(function()
-	toggleCinematicMode()
-end)
+if floatingButton then
+	floatingButton.MouseButton1Click:Connect(function()
+		toggleCinematicMode()
+	end)
+end
 
 -- ==================== KEYBOARD SHORTCUT ====================
 

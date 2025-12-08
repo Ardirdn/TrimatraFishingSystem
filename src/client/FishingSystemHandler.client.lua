@@ -2134,7 +2134,7 @@ end
 
 _G.toggleAfkMode = toggleAfkMode
 
--- ✅ CREATE AFK BUTTON (IMAGE ICON - NO BACKGROUND)
+-- ✅ CREATE AFK BUTTON (USING HUD TEMPLATE)
 local function createAfkButton()
 	local playerGui = Player:WaitForChild("PlayerGui")
 	
@@ -2154,74 +2154,104 @@ local function createAfkButton()
 		end
 	end
 	
-	local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+	-- ✅ Use HUD template
+	local hudGui = playerGui:WaitForChild("HUD", 10)
+	local leftFrame = hudGui and hudGui:FindFirstChild("Left")
+	local buttonTemplate = leftFrame and leftFrame:FindFirstChild("ButtonTemplate")
 	
-	local screenGui = Instance.new("ScreenGui")
-	screenGui.Name = "AfkButtonGUI"
-	screenGui.ResetOnSpawn = false
-	screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-	screenGui.Parent = playerGui
+	local afkButton = nil
+	local label = nil
 	
-	-- Use ImageButton with custom icon instead of TextButton
-	local afkButton = Instance.new("ImageButton")
-	afkButton.Name = "AfkButton"
-	afkButton.Size = UDim2.new(0.1, 0, 0.1, 0) -- 10% of screen
-	afkButton.Position = UDim2.new(0.01, 0, 0.6, 0)
-	afkButton.BackgroundTransparency = 1 -- No background
-	afkButton.BorderSizePixel = 0
-	afkButton.Image = "rbxassetid://98033273507939" -- AFK icon
-	afkButton.ScaleType = Enum.ScaleType.Fit
-	afkButton.Parent = screenGui
-	
-	-- Keep button square
-	local aspect = Instance.new("UIAspectRatioConstraint")
-	aspect.AspectRatio = 1
-	aspect.Parent = afkButton
-	
-	-- Size limits
-	local sizeConstraint = Instance.new("UISizeConstraint")
-	sizeConstraint.MinSize = Vector2.new(35, 35)
-	sizeConstraint.MaxSize = Vector2.new(60, 60)
-	sizeConstraint.Parent = afkButton
-	
-	-- Text below icon
-	local label = Instance.new("TextLabel")
-	label.Size = UDim2.new(1, 0, 0.3, 0)
-	label.Position = UDim2.new(0, 0, 1, 2) -- Below the icon
-	label.BackgroundTransparency = 1
-	label.Font = Enum.Font.GothamBold
-	label.Text = "AFK"
-	label.TextColor3 = Color3.fromRGB(255, 255, 255)
-	label.TextScaled = true
-	label.TextStrokeTransparency = 0.5
-	label.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
-	label.Parent = afkButton
-	
-	local labelTextConstraint = Instance.new("UITextSizeConstraint")
-	labelTextConstraint.MinTextSize = 8
-	labelTextConstraint.MaxTextSize = 12
-	labelTextConstraint.Parent = label
+	if buttonTemplate then
+		-- ✅ Hide the original template
+		buttonTemplate.Visible = false
+		
+		-- Clone the template
+		local buttonContainer = buttonTemplate:Clone()
+		buttonContainer.Name = "AfkButton"
+		buttonContainer.Visible = true
+		buttonContainer.LayoutOrder = 3 -- Third button on left
+		buttonContainer.BackgroundTransparency = 1 -- ✅ Transparent container
+		buttonContainer.Parent = leftFrame
+		
+		-- Get references
+		afkButton = buttonContainer:FindFirstChild("ImageButton")
+		label = buttonContainer:FindFirstChild("TextLabel")
+		
+		-- Set button properties
+		if afkButton then
+			afkButton.Image = "rbxassetid://98033273507939" -- AFK icon
+			afkButton.BackgroundTransparency = 1 -- ✅ Transparent button
+		end
+		
+		if label then
+			label.Text = "AFK"
+		end
+		
+		print("✅ [FISHING] AFK Button using HUD template (Left)")
+	else
+		-- Fallback: Create button manually if template not found
+		warn("[FISHING] HUD template not found, creating AFK button manually")
+		
+		local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+		
+		local screenGui = Instance.new("ScreenGui")
+		screenGui.Name = "AfkButtonGUI"
+		screenGui.ResetOnSpawn = false
+		screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+		screenGui.Parent = playerGui
+		
+		afkButton = Instance.new("ImageButton")
+		afkButton.Name = "AfkButton"
+		afkButton.Size = UDim2.new(0.1, 0, 0.1, 0)
+		afkButton.Position = UDim2.new(0.01, 0, 0.6, 0)
+		afkButton.BackgroundTransparency = 1
+		afkButton.BorderSizePixel = 0
+		afkButton.Image = "rbxassetid://98033273507939"
+		afkButton.ScaleType = Enum.ScaleType.Fit
+		afkButton.Parent = screenGui
+		
+		local aspect = Instance.new("UIAspectRatioConstraint")
+		aspect.AspectRatio = 1
+		aspect.Parent = afkButton
+		
+		label = Instance.new("TextLabel")
+		label.Size = UDim2.new(1, 0, 0.3, 0)
+		label.Position = UDim2.new(0, 0, 1, 2)
+		label.BackgroundTransparency = 1
+		label.Font = Enum.Font.GothamBold
+		label.Text = "AFK"
+		label.TextColor3 = Color3.fromRGB(255, 255, 255)
+		label.TextScaled = true
+		label.Parent = afkButton
+	end
 	
 	local function updateButtonVisual()
-		if afkMode then
-			-- Active state - add green tint overlay or change image color
-			afkButton.ImageColor3 = Color3.fromRGB(0, 255, 100) -- Green tint
-			label.TextColor3 = Color3.fromRGB(0, 255, 100)
-		else
-			-- Inactive state - normal color
-			afkButton.ImageColor3 = Color3.fromRGB(255, 255, 255) -- Normal
-			label.TextColor3 = Color3.fromRGB(255, 255, 255)
+		if afkButton then
+			if afkMode then
+				afkButton.ImageColor3 = Color3.fromRGB(0, 255, 100) -- Green tint
+			else
+				afkButton.ImageColor3 = Color3.fromRGB(255, 255, 255) -- Normal
+			end
+		end
+		if label then
+			if afkMode then
+				label.TextColor3 = Color3.fromRGB(0, 255, 100)
+			else
+				label.TextColor3 = Color3.fromRGB(255, 255, 255)
+			end
 		end
 	end
 	
 	-- ✅ Support both mouse AND touch
-	afkButton.MouseButton1Click:Connect(function()
-		toggleAfkMode()
-		updateButtonVisual()
-	end)
+	if afkButton then
+		afkButton.MouseButton1Click:Connect(function()
+			toggleAfkMode()
+			updateButtonVisual()
+		end)
+	end
 	
-	print("✅ [FISHING] AFK Button created (Image Icon)")
-	return screenGui
+	print("✅ [FISHING] AFK Button created")
 end
 
 -- Create AFK button after setup
@@ -2522,22 +2552,31 @@ setupCharacterMonitor()
 local function checkAnyUIOpen()
 	local playerGui = player.PlayerGui
 	
-	-- List of UI panels to check
-	local uiNames = {
-		"EquipmentGUI",
-		"FishCollectionGUI",
-		"FishermanShopGUI",
-		"RodShopGUI",
-		"InventoryGUI",
-		"ShopGUI",
-		"SettingsGUI"
+	-- List of UI panels to check (GUI name -> Panel name)
+	local uiChecks = {
+		-- Existing UIs
+		{gui = "EquipmentGUI", panel = "MainPanel"},
+		{gui = "FishCollectionGUI", panel = "MainPanel"},
+		{gui = "FishermanShopGUI", panel = "ShopPanel"},
+		{gui = "RodShopGUI", panel = "MainPanel"},
+		{gui = "InventoryGUI", panel = "MainPanel"},
+		{gui = "InventoryGUI_V3", panel = "MainPanel"}, -- ✅ Correct inventory name
+		{gui = "SettingsGUI", panel = "MainPanel"},
+		-- ✅ NEW: Additional UIs
+		{gui = "RedeemGui", panel = "MainPanel"},
+		{gui = "DonateGUI", panel = "MainPanel"},
+		{gui = "DonateGui", panel = "MainPanel"}, -- Alternative name
+		{gui = "Shop", panel = "MainPanel"}, -- Shop with auras
+		{gui = "ShopGUI", panel = "MainPanel"},
+		{gui = "MusicPlayer", panel = "MainPanel"},
+		{gui = "InventorySystemGUI", panel = "MainPanel"},
 	}
 	
-	for _, uiName in ipairs(uiNames) do
-		local ui = playerGui:FindFirstChild(uiName)
+	for _, check in ipairs(uiChecks) do
+		local ui = playerGui:FindFirstChild(check.gui)
 		if ui then
-			local mainPanel = ui:FindFirstChild("MainPanel") or ui:FindFirstChild("ShopPanel") or ui:FindFirstChild("Frame")
-			if mainPanel and mainPanel:IsA("GuiObject") and mainPanel.Visible then
+			local panel = ui:FindFirstChild(check.panel) or ui:FindFirstChild("Frame") or ui:FindFirstChild("ShopPanel")
+			if panel and panel:IsA("GuiObject") and panel.Visible then
 				return true
 			end
 		end

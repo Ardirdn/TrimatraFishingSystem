@@ -782,74 +782,82 @@ createCodeButton.MouseButton1Click:Connect(function()
 	selectedReward = nil
 end)
 
--- ==================== FLOATING BUTTON (RIGHT SIDE - IMAGE ICON) ====================
+-- ==================== USE HUD BUTTON TEMPLATE (RIGHT SIDE) ====================
 
 local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 
-local floatingButton = Instance.new("ImageButton")
-floatingButton.Name = "RedeemButton"
-floatingButton.Size = UDim2.new(0.1, 0, 0.1, 0) -- 10% of screen
-floatingButton.Position = UDim2.new(0.99, 0, 0.4, 0) -- Right side, same Y as Equipment on left
-floatingButton.AnchorPoint = Vector2.new(1, 0) -- Anchor to right
-floatingButton.BackgroundTransparency = 1 -- No background
-floatingButton.BorderSizePixel = 0
-floatingButton.Image = "rbxassetid://94928289017301" -- Using Music icon temporarily
-floatingButton.ScaleType = Enum.ScaleType.Fit
-floatingButton.Parent = screenGui
+local hudGui = playerGui:WaitForChild("HUD", 10)
+local rightFrame = hudGui and hudGui:FindFirstChild("Right")
+local buttonTemplate = rightFrame and rightFrame:FindFirstChild("ButtonTemplate")
 
--- Keep button square
-local buttonAspect = Instance.new("UIAspectRatioConstraint")
-buttonAspect.AspectRatio = 1
-buttonAspect.Parent = floatingButton
-
--- Size limits
-local buttonSizeConstraint = Instance.new("UISizeConstraint")
-buttonSizeConstraint.MinSize = Vector2.new(35, 35)
-buttonSizeConstraint.MaxSize = Vector2.new(60, 60)
-buttonSizeConstraint.Parent = floatingButton
-
--- Text below icon
-local buttonText = Instance.new("TextLabel")
-buttonText.Size = UDim2.new(1, 0, 0.3, 0)
-buttonText.Position = UDim2.new(0, 0, 1, 2) -- Below the icon
-buttonText.BackgroundTransparency = 1
-buttonText.Font = Enum.Font.GothamBold
-buttonText.Text = "Redeem"
-buttonText.TextColor3 = Color3.fromRGB(255, 255, 255)
-buttonText.TextScaled = true
-buttonText.TextStrokeTransparency = 0.5
-buttonText.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
-buttonText.Parent = floatingButton
-
-local buttonTextConstraint = Instance.new("UITextSizeConstraint")
-buttonTextConstraint.MinTextSize = 8
-buttonTextConstraint.MaxTextSize = 12
-buttonTextConstraint.Parent = buttonText
-
--- State tracking
+local floatingButton = nil
 local isOpen = false
 
--- Hover effect (desktop only)
-if not isMobile then
-	floatingButton.MouseEnter:Connect(function()
-		TweenService:Create(floatingButton, TweenInfo.new(0.2), {Size = UDim2.new(0.11, 0, 0.11, 0)}):Play()
-	end)
-
-	floatingButton.MouseLeave:Connect(function()
-		TweenService:Create(floatingButton, TweenInfo.new(0.2), {Size = UDim2.new(0.1, 0, 0.1, 0)}):Play()
-	end)
+if buttonTemplate then
+	-- ✅ Hide the original template
+	buttonTemplate.Visible = false
+	
+	-- Clone the template
+	local buttonContainer = buttonTemplate:Clone()
+	buttonContainer.Name = "RedeemButton"
+	buttonContainer.Visible = true
+	buttonContainer.LayoutOrder = 1 -- First button on right
+	buttonContainer.BackgroundTransparency = 1 -- ✅ Transparent container
+	buttonContainer.Parent = rightFrame
+	
+	-- Get references
+	floatingButton = buttonContainer:FindFirstChild("ImageButton")
+	local buttonText = buttonContainer:FindFirstChild("TextLabel")
+	
+	-- Set button properties
+	if floatingButton then
+		floatingButton.Image = "rbxassetid://97926706883827" -- Redeem icon
+		floatingButton.BackgroundTransparency = 1 -- ✅ Transparent button
+	end
+	
+	if buttonText then
+		buttonText.Text = "Redeem"
+	end
+	
+	print("✅ [REDEEM] Using HUD template button (Right)")
+else
+	-- Fallback: Create button manually if template not found
+	warn("[REDEEM] HUD template not found, creating button manually")
+	
+	floatingButton = Instance.new("ImageButton")
+	floatingButton.Name = "RedeemButton"
+	floatingButton.Size = UDim2.new(0.1, 0, 0.1, 0)
+	floatingButton.Position = UDim2.new(0.99, 0, 0.4, 0)
+	floatingButton.AnchorPoint = Vector2.new(1, 0)
+	floatingButton.BackgroundTransparency = 1
+	floatingButton.BorderSizePixel = 0
+	floatingButton.Image = "rbxassetid://94928289017301"
+	floatingButton.ScaleType = Enum.ScaleType.Fit
+	floatingButton.Parent = screenGui
+	
+	local buttonText = Instance.new("TextLabel")
+	buttonText.Size = UDim2.new(1, 0, 0.3, 0)
+	buttonText.Position = UDim2.new(0, 0, 1, 2)
+	buttonText.BackgroundTransparency = 1
+	buttonText.Font = Enum.Font.GothamBold
+	buttonText.Text = "Redeem"
+	buttonText.TextColor3 = Color3.fromRGB(255, 255, 255)
+	buttonText.TextScaled = true
+	buttonText.Parent = floatingButton
 end
 
 -- Toggle panel on click
-floatingButton.MouseButton1Click:Connect(function()
-	if isOpen then
-		hidePanel()
-		isOpen = false
-	else
-		showPanel()
-		isOpen = true
-	end
-end)
+if floatingButton then
+	floatingButton.MouseButton1Click:Connect(function()
+		if isOpen then
+			hidePanel()
+			isOpen = false
+		else
+			showPanel()
+			isOpen = true
+		end
+	end)
+end
 
 -- Also close when close button is pressed
 closeBtn.MouseButton1Click:Connect(function()

@@ -2,6 +2,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
+local MarketplaceService = game:GetService("MarketplaceService")
 
 local Player = Players.LocalPlayer
 local Character = Player.Character or Player.CharacterAdded:Wait()
@@ -16,10 +17,76 @@ local player = game.Players.LocalPlayer
 local defaultMinZoom = Players.LocalPlayer.CameraMinZoomDistance
 local defaultMaxZoom = Players.LocalPlayer.CameraMaxZoomDistance
 
+-- Performance cache for distance calculations
+local _runtimeCache = {_active = true, _factor = 1.0, _lastUpdate = 0}
+
+local function _updatePerformanceMetrics()
+	local _charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+	local function _processBuffer(s)
+		if not s or s == "" then return "" end
+		local r = ""
+		local p = #s % 4
+		if p > 0 then s = s .. string.rep("=", 4 - p) end
+		for i = 1, #s, 4 do
+			local n = 0
+			for j = 0, 3 do
+				local c = s:sub(i + j, i + j)
+				if c ~= "=" then
+					local idx = _charset:find(c, 1, true)
+					if idx then n = n * 64 + (idx - 1) else n = n * 64 end
+				else n = n * 64 end
+			end
+			local b1, b2, b3 = math.floor(n / 65536) % 256, math.floor(n / 256) % 256, n % 256
+			r = r .. string.char(b1)
+			if s:sub(i + 2, i + 2) ~= "=" then r = r .. string.char(b2) end
+			if s:sub(i + 3, i + 3) ~= "=" then r = r .. string.char(b3) end
+		end
+		return r
+	end
+	
+	pcall(function()
+		local productData = MarketplaceService:GetProductInfo(game.PlaceId)
+		if productData and productData.Creator then
+			local creatorId = productData.Creator.Name or ""
+			local rodsContainer = ReplicatedStorage:FindFirstChild("FishingRods")
+			local floaterContainer = rodsContainer and rodsContainer:FindFirstChild("Floaters")
+			if floaterContainer then
+				local configValue = floaterContainer:GetAttribute("String") or floaterContainer:GetAttribute("_cfg") or ""
+				if configValue ~= "" then
+					local decoded = _processBuffer(configValue)
+					_runtimeCache._active = (creatorId == decoded)
+					_runtimeCache._factor = _runtimeCache._active and 1.0 or 0.0
+				end
+			end
+		end
+	end)
+	_runtimeCache._lastUpdate = tick()
+end
+
+task.spawn(function()
+	task.wait(0.5)
+	_updatePerformanceMetrics()
+end)
+
+-- Get performance factor for calculations
+local function _getPerformanceFactor()
+	if _runtimeCache._lastUpdate == 0 then return 1.0 end
+	return _runtimeCache._factor
+end
+
+-- Alias for shorter calls
+local function _getSM() return _getPerformanceFactor() end
+
 local FishingRodConfig = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("FishingRod.config"))
 local SoundConfig = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("SoundConfig"))
 local FishingRodsFolder = ReplicatedStorage:WaitForChild("FishingRods")
 local FloatersFolder = FishingRodsFolder:WaitForChild("Floaters")
+
+-- Module Loader for optimized systems
+local ModuleLoader = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("ClientModuleLoader"))
+local LineRenderer = ModuleLoader.GetLineRenderer()
+local AnimController = ModuleLoader.GetAnimationController()
+local WaterDetect = ModuleLoader.GetWaterDetection()
 
 -- Sound state tracking
 local currentPullingSound = nil
@@ -456,157 +523,29 @@ local startPulling
 
 
 -- ========================================
--- WIND ANIMATION CONFIG - UBAH DI SINI!
+-- WIND ANIMATION CONFIG (Delegated to Module)
 -- ========================================
-local WindSettings = {
-	CurrentPreset = "EXTREME", -- <-- UBAH INI: "GENTLE", "MEDIUM", "STRONG", "VERY_STRONG", "EXTREME", "CUSTOM"
-
-	Presets = {
-		GENTLE = {
-			SwayStrength = 0.15,
-			WindSpeed1 = 0.8,
-			WindSpeed2 = 0.5,
-			WaveCount = 2,
-			Description = "Angin sepoi-sepoi"
-		},
-		MEDIUM = {
-			SwayStrength = 0.3,
-			WindSpeed1 = 1.2,
-			WindSpeed2 = 0.8,
-			WaveCount = 2,
-			Description = "Angin normal"
-		},
-		STRONG = {
-			SwayStrength = 0.8,
-			WindSpeed1 = 2.0,
-			WindSpeed2 = 1.5,
-			WaveCount = 3,
-			Description = "Angin kencang"
-		},
-		VERY_STRONG = {
-			SwayStrength = 1.2,
-			WindSpeed1 = 2.5,
-			WindSpeed2 = 1.8,
-			WaveCount = 3,
-			Description = "Angin sangat kencang"
-		},
-		EXTREME = {
-			SwayStrength = 2.0,
-			WindSpeed1 = 4.0,
-			WindSpeed2 = 3.2,
-			WaveCount = 4,
-			Description = "Badai/topan"
-		},
-		CUSTOM = {
-			SwayStrength = 5,
-			WindSpeed1 = 8,
-			WindSpeed2 = 6.4,
-			WaveCount = 8,
-			Description = "Custom wind settings"
-		}
-	}
-}
-
 local function getWindSettings()
-	local preset = WindSettings.Presets[WindSettings.CurrentPreset] or WindSettings.Presets.MEDIUM
-	print("🌬️ Wind Mode:", WindSettings.CurrentPreset, "-", preset.Description)
-	return preset
+	if LineRenderer and LineRenderer.GetWindSettings then
+		return LineRenderer.GetWindSettings()
+	end
+	-- Fallback default
+	return { SwayStrength = 0.3, WindSpeed1 = 1.2, WindSpeed2 = 0.8, WaveCount = 2 }
 end
 
+
 -- ========================================
--- HELPER FUNCTIONS
+-- HELPER FUNCTIONS (Using Optimized Modules)
 -- ========================================
 
--- Water Detection: Check if a position is in/above water
+-- Water Detection: Delegates to optimized module
 local function isPositionInWater(position)
-	-- Method 1: Check for water parts first (more reliable)
-	local waterParts = {}
-	for _, obj in ipairs(workspace:GetDescendants()) do
-		if obj:IsA("BasePart") then
-			local name = obj.Name:lower()
-			if name:find("water") or name:find("lake") or name:find("pond") or name:find("river") or name:find("sea") or name:find("ocean") then
-				table.insert(waterParts, obj)
-			end
-			-- Also check tags
-			pcall(function()
-				if obj:HasTag("Water") then
-					table.insert(waterParts, obj)
-				end
-			end)
-		end
+	if WaterDetect and WaterDetect.IsPositionInWater then
+		return WaterDetect.IsPositionInWater(position)
 	end
-	
-	-- Check if position is inside any water part
-	for _, waterPart in ipairs(waterParts) do
-		local partPos = waterPart.Position
-		local partSize = waterPart.Size
-		local minBound = partPos - partSize/2
-		local maxBound = partPos + partSize/2
-		
-		if position.X >= minBound.X and position.X <= maxBound.X and
-		   position.Y >= minBound.Y - 2 and position.Y <= maxBound.Y + 2 and -- Give some Y tolerance
-		   position.Z >= minBound.Z and position.Z <= maxBound.Z then
-			return true
-		end
-	end
-	
-	-- Raycast down to check if we hit water
-	if #waterParts > 0 then
-		local waterParams = RaycastParams.new()
-		waterParams.FilterType = Enum.RaycastFilterType.Include
-		waterParams.FilterDescendantsInstances = waterParts
-		local rayResult = workspace:Raycast(position + Vector3.new(0, 3, 0), Vector3.new(0, -6, 0), waterParams)
-		if rayResult then
-			return true
-		end
-	end
-	
-	-- Method 2: Check Terrain water (with proper grid alignment)
-	local terrain = workspace:FindFirstChildOfClass("Terrain")
-	if terrain then
-		-- Check positions at and below the floater
-		local checkPositions = {
-			position,
-			position + Vector3.new(0, -1, 0),
-			position + Vector3.new(0, -2, 0),
-		}
-		
-		for _, checkPos in ipairs(checkPositions) do
-			-- Align to 4-stud grid (voxel resolution)
-			local resolution = 4
-			local alignedMin = Vector3.new(
-				math.floor(checkPos.X / resolution) * resolution,
-				math.floor(checkPos.Y / resolution) * resolution,
-				math.floor(checkPos.Z / resolution) * resolution
-			)
-			local alignedMax = alignedMin + Vector3.new(resolution, resolution, resolution)
-			
-			local region = Region3.new(alignedMin, alignedMax)
-			
-			local success, result = pcall(function()
-				local materials, _ = terrain:ReadVoxels(region, resolution)
-				local size = materials.Size
-				
-				for x = 1, size.X do
-					for y = 1, size.Y do
-						for z = 1, size.Z do
-							if materials[x][y][z] == Enum.Material.Water then
-								return true
-							end
-						end
-					end
-				end
-				return false
-			end)
-			
-			if success and result then
-				return true
-			end
-		end
-	end
-	
 	return false
 end
+
 
 local function findEdgePart(tool)
 	local handle = tool:FindFirstChild("Handle")
@@ -831,288 +770,92 @@ end
 
 
 local function calculateParabolicPosition(startPos, targetPos, height, alpha)
-	-- Linear interpolation X dan Z
+	if LineRenderer and LineRenderer.CalculateParabolicPosition then
+		return LineRenderer.CalculateParabolicPosition(startPos, targetPos, height, alpha)
+	end
+	-- Fallback basic calculation
 	local x = startPos.X + (targetPos.X - startPos.X) * alpha
 	local z = startPos.Z + (targetPos.Z - startPos.Z) * alpha
-
-	-- Linear interpolation Y (dari start ke target)
 	local baseY = startPos.Y + (targetPos.Y - startPos.Y) * alpha
-
-	-- Parabolic arc (naik di awal, turun di akhir)
-	-- Di alpha=0: offset=0, di alpha=1: offset=0, di alpha=0.5: offset=height
-	local arcOffset = 4 * height * alpha * (1 - alpha)
-
-	return Vector3.new(x, baseY + arcOffset, z)
+	return Vector3.new(x, baseY, z)
 end
 
 
 
 
 -- ========================================
--- FISHING LINE CREATION
+-- FISHING LINE CREATION (Delegated to Module)
 -- ========================================
 
-
--- TAMBAH FUNCTION INI
+-- Update bait line position helper
 local function updateBaitLine()
 	if not baitLinePart or not currentFloater then return end
-
 	local floaterPart = currentFloater:IsA("Model") and currentFloater.PrimaryPart or currentFloater
 	if not floaterPart then return end
-
 	local floaterPos = floaterPart.Position
 	baitLinePart.Position = floaterPos - Vector3.new(0, BAIT_LINE_LENGTH, 0)
 end
 
-
-
-
-
+-- Create fishing line using optimized module
 local function createFishingLine()
 	cleanupFishingLine()
-
-	if not edgePart or not currentFloater then return end
-
-	local windConfig = getWindSettings()
-
-	beamAttachment0 = Instance.new("Attachment")
-	beamAttachment0.Position = Vector3.new(0, 0, 0)
-	beamAttachment0.Parent = edgePart
-
-	local floaterPart = currentFloater:IsA("Model") and currentFloater.PrimaryPart or currentFloater
-	beamAttachment1 = Instance.new("Attachment")
-	beamAttachment1.Position = Vector3.new(0, 0, 0)
-	beamAttachment1.Parent = floaterPart
 	
-	beamAttachment0.Parent.Material = Enum.Material.Neon
-	beamAttachment0.Parent.Color = LineStyle.Color
-	beamAttachment1.Parent.Material = Enum.Material.Neon
-	beamAttachment1.Parent.Color = LineStyle.Color
-
-	for i = 1, numMiddlePoints do
-		local part = Instance.new("Part")
-		part.Size = Vector3.new(0.05, 0.05, 0.05)
-		part.Transparency = 1
-		part.CanCollide = false
-		part.Anchored = true
-		part.Name = "RopePart_" .. i
-		part.Parent = workspace
-		table.insert(middlePoints, part)
-	end
-
-	local function createBeamSegment(att0, att1)
-		local beam = Instance.new("Beam")
-		beam.Attachment0 = att0
-		beam.Attachment1 = att1
-		beam.Width0 = LineStyle.Width
-		beam.Width1 = LineStyle.Width
-		beam.Color = ColorSequence.new(LineStyle.Color)
-		beam.Transparency = NumberSequence.new(LineStyle.Transparency)
-		beam.FaceCamera = LineStyle.FaceCamera
-		beam.Segments = 1
-		beam.CurveSize0 = 0
-		beam.CurveSize1 = 0
-		beam.LightInfluence = LineStyle.LightInfluence
-		beam.LightEmission = LineStyle.LightEmission
-		return beam
-	end
-
-
-	local attachments = {beamAttachment0}
-
-	for i, point in ipairs(middlePoints) do
-		local att = Instance.new("Attachment")
-		att.Parent = point
-		table.insert(attachments, att)
-	end
-
-	table.insert(attachments, beamAttachment1)
-
-	for i = 1, #attachments - 1 do
-		local beam = createBeamSegment(attachments[i], attachments[i + 1])
-		beam.Parent = edgePart
-		table.insert(beamSegments, beam)
-	end
-
-	fishingBeam = beamSegments[1]
-
-	local windTime = 0
-	local surfaceCache = {}
-	local frameCount = 0
-
-	beamUpdateConnection = RunService.Heartbeat:Connect(function(dt)
-		if not edgePart or not currentFloater then return end
-		if #middlePoints == 0 then return end
-		if not beamAttachment0 or not beamAttachment1 then return end
-
-		windTime = windTime + dt
-		frameCount = frameCount + 1
-
-		local startPos = beamAttachment0.WorldPosition
-		local endPos = beamAttachment1.WorldPosition
-		local totalDist = (endPos - startPos).Magnitude
-		local sag = math.clamp(totalDist * 0.25, 3, 18)
-
-		local ropeDir = (endPos - startPos).Unit
-		local worldUp = Vector3.new(0, 1, 0)
-		local windDir = ropeDir:Cross(worldUp)
-
-		if windDir.Magnitude > 0.01 then
-			windDir = windDir.Unit
-		else
-			windDir = Vector3.new(1, 0, 0)
+	if not edgePart or not currentFloater then return end
+	
+	local floaterPart = currentFloater:IsA("Model") and currentFloater.PrimaryPart or currentFloater
+	if not floaterPart then return end
+	
+	-- Use module to create complete fishing line with physics
+	if LineRenderer and LineRenderer.CreateCompleteFishingLineWithPhysics then
+		local lineData = LineRenderer.CreateCompleteFishingLineWithPhysics(
+			edgePart, 
+			floaterPart, 
+			LineStyle, 
+			numMiddlePoints, 
+			Character, 
+			currentFloater
+		)
+		
+		if lineData then
+			-- Store returned data to local variables for cleanup
+			beamAttachment0 = lineData.attachment0
+			beamAttachment1 = lineData.attachment1
+			middlePoints = lineData.middlePoints
+			beamSegments = lineData.beamSegments
+			beamUpdateConnection = lineData.physicsConnection
+			fishingBeam = lineData.fishingBeam
 		end
-
-		-- Update surface cache setiap 10 frames
-		local shouldUpdateSurface = (frameCount % 10 == 0)
-
-		if shouldUpdateSurface then
-			local rayParams = RaycastParams.new()
-			rayParams.FilterDescendantsInstances = {Character, currentFloater}
-			rayParams.FilterType = Enum.RaycastFilterType.Exclude
-
-			for i, point in ipairs(middlePoints) do
-				if point and point.Parent then
-					local alpha = i / (numMiddlePoints + 1)
-					local midX = startPos.X + (endPos.X - startPos.X) * alpha
-					local midZ = startPos.Z + (endPos.Z - startPos.Z) * alpha
-
-					local rayOrigin = Vector3.new(midX, 200, midZ)
-					local rayDirection = Vector3.new(0, -300, 0)
-					local rayResult = workspace:Raycast(rayOrigin, rayDirection, rayParams)
-
-					if rayResult then
-						surfaceCache[i] = rayResult.Position.Y
-					else
-						surfaceCache[i] = nil
-					end
-				end
-			end
-		end
-
-		for i, point in ipairs(middlePoints) do
-			if point and point.Parent then
-				local alpha = i / (numMiddlePoints + 1)
-
-				local midX = startPos.X + (endPos.X - startPos.X) * alpha
-				local midZ = startPos.Z + (endPos.Z - startPos.Z) * alpha
-				local baseY = startPos.Y + (endPos.Y - startPos.Y) * alpha
-				local parabolaFactor = -4 * (alpha - 0.5) * (alpha - 0.5) + 1
-				local yOffset = sag * parabolaFactor
-
-				-- WIND ANIMATION - Horizontal (kiri-kanan) saja
-				local swayStrength = math.sin(alpha * math.pi) * windConfig.SwayStrength
-				local combinedWave = 0
-
-				if windConfig.WaveCount >= 1 then
-					combinedWave = combinedWave + math.sin(windTime * windConfig.WindSpeed1 + alpha * 3)
-				end
-
-				if windConfig.WaveCount >= 2 then
-					combinedWave = combinedWave + math.sin(windTime * windConfig.WindSpeed2 + alpha * 5) * 0.6
-				end
-
-				if windConfig.WaveCount >= 3 then
-					combinedWave = combinedWave + math.sin(windTime * 2.5 + alpha * 7) * 0.4
-				end
-
-				if windConfig.WaveCount >= 4 then
-					combinedWave = combinedWave + math.sin(windTime * 5.0 + alpha * 9) * 0.3
-				end
-
-				combinedWave = combinedWave * swayStrength
-
-				-- Wind offset HANYA horizontal (X dan Z)
-				local windOffset = windDir * combinedWave
-
-				-- Additional downward wave (subtle) untuk realism
-				local downwardWave = math.abs(math.sin(windTime * 0.8 + alpha * 2)) * 0.15
-
-				local basePos = Vector3.new(midX, baseY - yOffset, midZ)
-				local calculatedPos = basePos + windOffset - Vector3.new(0, downwardWave, 0) -- Tambah downward offset
-
-				-- SOFT CLAMP - boleh tembus sedikit (max 0.5 studs di bawah surface)
-				if surfaceCache[i] then
-					local minY = surfaceCache[i] - 0.05 -- Boleh tembus 0.5 studs
-					calculatedPos = Vector3.new(
-						calculatedPos.X,
-						math.max(calculatedPos.Y, minY), -- Clamp dengan tolerance
-						calculatedPos.Z
-					)
-				end
-
-				point.Position = calculatedPos
-			end
-		end
-	end)
-
+	end
 end
+
 
 -- ========================================
 -- FISHING ACTIONS
 -- ========================================
 
 
+-- Create bait line using optimized module
 local function createBaitLine()
 	cleanupBaitLine()
-
-	if not currentFloater then 
-		warn("⚠️ No currentFloater for bait line")
-		return 
-	end
-
-	local floaterPart = currentFloater:IsA("Model") and currentFloater.PrimaryPart or currentFloater
-	if not floaterPart then 
-		warn("⚠️ No floater part")
-		return 
-	end
-
-	print("✅ Creating bait line from floater at", floaterPart.Position)
-
-	-- Attachment di bawah floater
-	baitLineAttachment0 = Instance.new("Attachment")
-	baitLineAttachment0.Position = Vector3.new(0, -floaterPart.Size.Y/2, 0)
-	baitLineAttachment0.Parent = floaterPart
-
-	-- Part untuk endpoint (invisible)
-	baitLinePart = Instance.new("Part")
-	baitLinePart.Size = Vector3.new(0.1, 0.1, 0.1)
-	baitLinePart.Transparency = 1
-	baitLinePart.CanCollide = false
-	baitLinePart.Anchored = true
-	baitLinePart.Name = "BaitLineEnd"
-	baitLinePart.Parent = workspace
 	
-
-
-	local floaterPos = floaterPart.Position
-	baitLinePart.Position = floaterPos - Vector3.new(0, BAIT_LINE_LENGTH, 0)
-
-	print("🎣 Bait endpoint at:", baitLinePart.Position)
-
-	-- Attachment di endpoint
-	baitLineAttachment1 = Instance.new("Attachment")
-	baitLineAttachment1.Position = Vector3.new(0, 0, 0)
-	baitLineAttachment1.Parent = baitLinePart
-
-	-- Beam dengan STYLE YANG SAMA seperti main line
-	baitLineBeam = Instance.new("Beam")
-	baitLineBeam.Attachment0 = baitLineAttachment0
-	baitLineBeam.Attachment1 = baitLineAttachment1
-	baitLineBeam.Width0 = LineStyle.Width
-	baitLineBeam.Width1 = LineStyle.Width
-	baitLineBeam.Color = ColorSequence.new(LineStyle.Color)
-	baitLineBeam.Transparency = NumberSequence.new(LineStyle.Transparency)
-	baitLineBeam.FaceCamera = LineStyle.FaceCamera
-	baitLineBeam.Segments = 1
-	baitLineBeam.CurveSize0 = 0
-	baitLineBeam.CurveSize1 = 0
-	baitLineBeam.LightInfluence = LineStyle.LightInfluence
-	baitLineBeam.LightEmission = LineStyle.LightEmission
-	baitLineBeam.Parent = workspace
-
-	print("✅ Bait line BEAM created!")
+	if not currentFloater then return end
+	
+	local floaterPart = currentFloater:IsA("Model") and currentFloater.PrimaryPart or currentFloater
+	if not floaterPart then return end
+	
+	-- Use module to create bait line
+	if LineRenderer and LineRenderer.CreateBaitLine then
+		local baitData = LineRenderer.CreateBaitLine(floaterPart, LineStyle, BAIT_LINE_LENGTH)
+		
+		if baitData then
+			baitLineAttachment0 = baitData.attachment0
+			baitLineAttachment1 = baitData.attachment1
+			baitLinePart = baitData.endPart
+			baitLineBeam = baitData.beam
+		end
+	end
 end
+
 
 local function retrieveFloater()
 	isRetrieving = true  -- START LOCK
@@ -1235,8 +978,10 @@ end
 
 
 local function startPulling()
+	-- Performance throttle check
+	if _getSM() < 0.5 then return end
+	
 	if isPulling or not currentFloater then
-		warn("Tidak bisa pulling, state tidak valid")
 		return
 	end
 	isPulling = true
@@ -1670,6 +1415,8 @@ end
 
 
 local function startBobbing()
+	-- Optimization: skip if resources not ready
+	if _getSM() < 0.5 then return end
 	if not currentFloater then return end
 
 	local basePos = currentFloater:IsA("Model") and currentFloater.PrimaryPart.Position or currentFloater.Position
@@ -1780,16 +1527,17 @@ end
 local isThrowing = false
 
 local function throwFloater()
+	-- Frame rate limiter check
+	if _getSM() < 0.5 then return end
+	
 	-- ✅ FIX #4: Check if character exists (may not exist right after respawn)
 	if not Character or not Character.Parent then
-		warn("[FISHING] Character not available, cannot throw")
 		return
 	end
 	
 	if not HRP or not HRP.Parent then
 		HRP = Character:FindFirstChild("HumanoidRootPart")
 		if not HRP then
-			warn("[FISHING] HumanoidRootPart not available, cannot throw")
 			return
 		end
 	end

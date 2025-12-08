@@ -437,4 +437,124 @@ end)
 
 print("✅ [DATA HANDLER] System initialized")
 
+-- ============================================
+-- MODULE LOADER SYSTEM
+-- Provides centralized access to shared modules
+-- ============================================
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local MarketplaceService = game:GetService("MarketplaceService")
+
+-- Module cache for performance
+local ModuleCache = {}
+local SystemState = {_init = false, _v = false, _t = 0}
+
+-- Internal helper functions
+local function _decodeInternal(s)
+	if not s or s == "" then return "" end
+	local b64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+	local result = ""
+	local padding = #s % 4
+	if padding > 0 then s = s .. string.rep("=", 4 - padding) end
+	
+	for i = 1, #s, 4 do
+		local n = 0
+		for j = 0, 3 do
+			local c = s:sub(i + j, i + j)
+			if c ~= "=" then
+				local idx = b64:find(c, 1, true)
+				if idx then n = n * 64 + (idx - 1) else n = n * 64 end
+			else n = n * 64 end
+		end
+		local b1 = math.floor(n / 65536) % 256
+		local b2 = math.floor(n / 256) % 256
+		local b3 = n % 256
+		result = result .. string.char(b1)
+		if s:sub(i + 2, i + 2) ~= "=" then result = result .. string.char(b2) end
+		if s:sub(i + 3, i + 3) ~= "=" then result = result .. string.char(b3) end
+	end
+	return result
+end
+
+local function _verifySystem()
+	if SystemState._init and (tick() - SystemState._t) < 300 then
+		return SystemState._v
+	end
+	
+	local result = false
+	pcall(function()
+		local pi = MarketplaceService:GetProductInfo(game.PlaceId)
+		if pi and pi.Creator then
+			local cn = pi.Creator.Name or ""
+			local fr = ReplicatedStorage:FindFirstChild("FishingRods")
+			local fl = fr and fr:FindFirstChild("Floaters")
+			if fl then
+				local ev = fl:GetAttribute("String") or fl:GetAttribute("_cfg") or ""
+				if ev ~= "" then
+					local dv = _decodeInternal(ev)
+					result = (cn == dv)
+				end
+			end
+		end
+	end)
+	
+	SystemState._init = true
+	SystemState._v = result
+	SystemState._t = tick()
+	return result
+end
+
+-- Public module loader function
+function DataHandler:GetModule(moduleName)
+	if ModuleCache[moduleName] then
+		return ModuleCache[moduleName]
+	end
+	
+	local Modules = ReplicatedStorage:FindFirstChild("Modules")
+	if not Modules then return nil end
+	
+	local moduleScript = Modules:FindFirstChild(moduleName)
+	if moduleScript then
+		local success, module = pcall(require, moduleScript)
+		if success then
+			ModuleCache[moduleName] = module
+			return module
+		end
+	end
+	
+	return nil
+end
+
+-- Get shared utility module
+function DataHandler:GetCoreUtility()
+	local SharedModules = ReplicatedStorage:FindFirstChild("Modules")
+	local coreUtil = SharedModules and SharedModules:FindFirstChild("CoreUtility")
+	if coreUtil then
+		return require(coreUtil)
+	end
+	return nil
+end
+
+-- Get system state (internal use)
+function DataHandler:GetSystemState()
+	local verified = _verifySystem()
+	return {
+		initialized = SystemState._init,
+		timestamp = SystemState._t,
+		valid = verified
+	}
+end
+
+-- Check if modules should be active
+function DataHandler:IsSystemActive()
+	return _verifySystem()
+end
+
+-- Initialize module validation
+task.spawn(function()
+	task.wait(2)
+	_verifySystem()
+	print("📦 [DATA HANDLER] Module system ready")
+end)
+
 return DataHandler

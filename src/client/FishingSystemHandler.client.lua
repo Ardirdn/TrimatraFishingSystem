@@ -88,6 +88,13 @@ local Cooldown = 1
 local afkMode = false    -- Control ON/OFF AFK mode
 local afkLoopTask = nil
 
+-- ✅ NEW: UI tracking to prevent throwing when UI is open
+local isAnyUIOpen = false
+
+-- ✅ NEW: New fish reward tracking for AFK mode
+local isNewFishUIVisible = false
+local lastNewFishTime = 0
+
 -- Dynamic LineStyle (updated when rod changes)
 local LineStyle = {
 	Width = 0.16,
@@ -420,60 +427,89 @@ end
 
 -- Water Detection: Check if a position is in/above water
 local function isPositionInWater(position)
-	local terrain = workspace:FindFirstChildOfClass("Terrain")
-	if not terrain then return false end
+	-- Method 1: Check for water parts first (more reliable)
+	local waterParts = {}
+	for _, obj in ipairs(workspace:GetDescendants()) do
+		if obj:IsA("BasePart") then
+			local name = obj.Name:lower()
+			if name:find("water") or name:find("lake") or name:find("pond") or name:find("river") or name:find("sea") or name:find("ocean") then
+				table.insert(waterParts, obj)
+			end
+			-- Also check tags
+			pcall(function()
+				if obj:HasTag("Water") then
+					table.insert(waterParts, obj)
+				end
+			end)
+		end
+	end
 	
-	-- Check terrain voxels at and below the position
-	local checkPositions = {
-		position,
-		position + Vector3.new(0, -1, 0),
-		position + Vector3.new(0, -2, 0),
-		position + Vector3.new(0, 1, 0)
-	}
-	
-	for _, checkPos in ipairs(checkPositions) do
-		local region = Region3.new(
-			checkPos - Vector3.new(2, 2, 2),
-			checkPos + Vector3.new(2, 2, 2)
-		)
+	-- Check if position is inside any water part
+	for _, waterPart in ipairs(waterParts) do
+		local partPos = waterPart.Position
+		local partSize = waterPart.Size
+		local minBound = partPos - partSize/2
+		local maxBound = partPos + partSize/2
 		
-		local success, result = pcall(function()
-			local materials, occupancies = terrain:ReadVoxels(region, 4)
-			local size = materials.Size
+		if position.X >= minBound.X and position.X <= maxBound.X and
+		   position.Y >= minBound.Y - 2 and position.Y <= maxBound.Y + 2 and -- Give some Y tolerance
+		   position.Z >= minBound.Z and position.Z <= maxBound.Z then
+			return true
+		end
+	end
+	
+	-- Raycast down to check if we hit water
+	if #waterParts > 0 then
+		local waterParams = RaycastParams.new()
+		waterParams.FilterType = Enum.RaycastFilterType.Include
+		waterParams.FilterDescendantsInstances = waterParts
+		local rayResult = workspace:Raycast(position + Vector3.new(0, 3, 0), Vector3.new(0, -6, 0), waterParams)
+		if rayResult then
+			return true
+		end
+	end
+	
+	-- Method 2: Check Terrain water (with proper grid alignment)
+	local terrain = workspace:FindFirstChildOfClass("Terrain")
+	if terrain then
+		-- Check positions at and below the floater
+		local checkPositions = {
+			position,
+			position + Vector3.new(0, -1, 0),
+			position + Vector3.new(0, -2, 0),
+		}
+		
+		for _, checkPos in ipairs(checkPositions) do
+			-- Align to 4-stud grid (voxel resolution)
+			local resolution = 4
+			local alignedMin = Vector3.new(
+				math.floor(checkPos.X / resolution) * resolution,
+				math.floor(checkPos.Y / resolution) * resolution,
+				math.floor(checkPos.Z / resolution) * resolution
+			)
+			local alignedMax = alignedMin + Vector3.new(resolution, resolution, resolution)
 			
-			for x = 1, size.X do
-				for y = 1, size.Y do
-					for z = 1, size.Z do
-						if materials[x][y][z] == Enum.Material.Water then
-							return true
+			local region = Region3.new(alignedMin, alignedMax)
+			
+			local success, result = pcall(function()
+				local materials, _ = terrain:ReadVoxels(region, resolution)
+				local size = materials.Size
+				
+				for x = 1, size.X do
+					for y = 1, size.Y do
+						for z = 1, size.Z do
+							if materials[x][y][z] == Enum.Material.Water then
+								return true
+							end
 						end
 					end
 				end
+				return false
+			end)
+			
+			if success and result then
+				return true
 			end
-			return false
-		end)
-		
-		if success and result then
-			return true
-		end
-	end
-	
-	-- Also check for water parts (tagged or named)
-	local waterParams = RaycastParams.new()
-	waterParams.FilterType = Enum.RaycastFilterType.Include
-	
-	local waterParts = {}
-	for _, obj in ipairs(workspace:GetDescendants()) do
-		if obj:IsA("BasePart") and (obj.Name:lower():find("water") or obj:HasTag("Water")) then
-			table.insert(waterParts, obj)
-		end
-	end
-	
-	if #waterParts > 0 then
-		waterParams.FilterDescendantsInstances = waterParts
-		local rayResult = workspace:Raycast(position + Vector3.new(0, 5, 0), Vector3.new(0, -10, 0), waterParams)
-		if rayResult then
-			return true
 		end
 	end
 	
@@ -1602,10 +1638,27 @@ end
 local isThrowing = false
 
 local function throwFloater()
-	if isFishing or isThrowing or isFloating or isPulling then
-		warn("Sedang proses fishing/lempar/floating/pulling, abaikan double call")
+	-- ✅ FIXED: Reset stuck states first (no floater = reset states)
+	if not currentFloater then
+		if isFloating then
+			isFloating = false
+		end
+		if isFishing then
+			isFishing = false
+		end
+	end
+	
+	if isThrowing or isPulling then
+		warn("Sedang proses lempar/pulling, abaikan double call")
 		return
 	end
+	
+	-- If there's already a floater, retrieve it first
+	if currentFloater then
+		warn("Ada floater aktif, retrieve dulu sebelum throw baru")
+		return
+	end
+	
 	isThrowing = true
 
 	if not currentConfig or not currentConfig.ThrowHeight then
@@ -1798,6 +1851,51 @@ local function startAfkLoop()
 		while _G.afkMode do
 			task.wait(0.1)
 
+			-- ✅ NEW: Skip if any UI is open
+			if isAnyUIOpen then
+				task.wait(0.5)
+				continue
+			end
+			
+			-- ✅ NEW: Wait 5 seconds after new fish UI appears
+			if isNewFishUIVisible then
+				print("[AFK] Waiting for new fish UI to close...")
+				task.wait(5) -- Wait 5 seconds
+				
+				-- Try to auto-close the new fish UI
+				local playerGui = player.PlayerGui
+				local fishRewardUI = playerGui:FindFirstChild("NewFishDiscovery")
+					or playerGui:FindFirstChild("NewFishDiscoveryGUI") 
+					or playerGui:FindFirstChild("FishRewardUI") 
+					or playerGui:FindFirstChild("FishCaughtUI")
+					or playerGui:FindFirstChild("SimpleFishNotif")
+				
+				if fishRewardUI then
+					print("[AFK] Found fish UI:", fishRewardUI.Name, "- attempting to close...")
+					
+					-- The NewFishDiscovery UI has a fullscreen invisible TextButton as closeButton
+					-- Find any TextButton with transparent background (the close button)
+					for _, child in ipairs(fishRewardUI:GetChildren()) do
+						if child:IsA("TextButton") and child.BackgroundTransparency >= 0.9 then
+							print("[AFK] Found fullscreen close button, activating...")
+							pcall(function() child:Activate() end)
+							break
+						end
+					end
+					
+					-- If that didn't work, just destroy the UI
+					task.wait(0.2)
+					if fishRewardUI and fishRewardUI.Parent then
+						print("[AFK] Force destroying fish UI...")
+						pcall(function() fishRewardUI:Destroy() end)
+					end
+				end
+				
+				isNewFishUIVisible = false
+				task.wait(0.5)
+				continue
+			end
+
 			-- Pastikan player pegang tool rod
 			local isRod = (currentTool and currentConfig and FishingRodConfig.Rods[currentTool.Name])
 			if isRod then
@@ -1849,6 +1947,12 @@ local function onMouseClick()
 		tostring(isRecovering), tostring(isRetrieving), tostring(isThrowing), tostring(isFishing), tostring(isFloating), tostring(isPulling)
 		))
 
+	-- ✅ NEW: Block throwing if any UI is open
+	if isAnyUIOpen then
+		warn("Klik diabaikan: UI sedang terbuka")
+		return
+	end
+
 	if isRecovering then
 		warn("Sedang masa jeda recovery. Lempar tidak boleh!")
 		return
@@ -1859,20 +1963,33 @@ local function onMouseClick()
 		return
 	end
 
-	if isFloating and not isPulling then
-		warn("Player klik saat bobbing, RETRIEVE fishing (cancel bobbing)!")
-		-- Cancel fishing dengan retrieve normal (ada animasi tarik)
-		isFloating = false
-		if bobConnection then
-			bobConnection:Disconnect()
-			bobConnection = nil
+	-- ✅ FIXED: If floater exists, handle retrieval
+	if currentFloater then
+		if not isPulling then
+			warn("Player klik, ada floater aktif - RETRIEVE!")
+			isFloating = false
+			isFishing = false
+			if bobConnection then
+				bobConnection:Disconnect()
+				bobConnection = nil
+			end
+			retrieveFloater()
+			return
 		end
-		retrieveFloater()
-		return
+	end
+	
+	-- ✅ FIXED: Reset stuck state - if isFloating but no currentFloater, reset state
+	if isFloating and not currentFloater then
+		warn("State stuck - isFloating true tapi tidak ada floater, reset...")
+		isFloating = false
+	end
+	
+	if isFishing and not currentFloater then
+		warn("State stuck - isFishing true tapi tidak ada floater, reset...")
+		isFishing = false
 	end
 
-
-	if isThrowing or isFishing or isPulling then
+	if isThrowing or isPulling then
 		warn("Klik diabaikan: Sedang proses lempar/pulling")
 		return
 	end
@@ -1992,6 +2109,73 @@ end)
 
 setupCharacterMonitor()
 
+-- ==================== UI TRACKING ====================
+-- Track when any UI is opened to prevent throwing
 
+local function checkAnyUIOpen()
+	local playerGui = player.PlayerGui
+	
+	-- List of UI panels to check
+	local uiNames = {
+		"EquipmentGUI",
+		"FishCollectionGUI",
+		"FishermanShopGUI",
+		"RodShopGUI",
+		"InventoryGUI",
+		"ShopGUI",
+		"SettingsGUI"
+	}
+	
+	for _, uiName in ipairs(uiNames) do
+		local ui = playerGui:FindFirstChild(uiName)
+		if ui then
+			local mainPanel = ui:FindFirstChild("MainPanel") or ui:FindFirstChild("ShopPanel") or ui:FindFirstChild("Frame")
+			if mainPanel and mainPanel:IsA("GuiObject") and mainPanel.Visible then
+				return true
+			end
+		end
+	end
+	
+	return false
+end
+
+-- Continuously check UI state
+task.spawn(function()
+	while true do
+		isAnyUIOpen = checkAnyUIOpen()
+		task.wait(0.2)
+	end
+end)
+
+-- ==================== NEW FISH EVENT LISTENER ====================
+local FishCaughtEvent = ReplicatedStorage:FindFirstChild("FishCaughtEvent")
+if FishCaughtEvent then
+	FishCaughtEvent.OnClientEvent:Connect(function(data)
+		if data and data.IsNewDiscovery then
+			print("🐟 [FISHING] New fish discovered! Setting flag for AFK mode...")
+			isNewFishUIVisible = true
+			lastNewFishTime = tick()
+			
+			-- Auto close other UIs if new fish is caught (only for rare+ fish)
+			local rarity = data.FishData and data.FishData.Rarity
+			if rarity and (rarity == "Rare" or rarity == "Epic" or rarity == "Legendary" or rarity == "Mythic") then
+				-- Close Equipment and Fish Collection UIs
+				local playerGui = player.PlayerGui
+				local equipUI = playerGui:FindFirstChild("EquipmentGUI")
+				local fishUI = playerGui:FindFirstChild("FishCollectionGUI")
+				
+				if equipUI then
+					local mainPanel = equipUI:FindFirstChild("MainPanel")
+					if mainPanel then mainPanel.Visible = false end
+				end
+				
+				if fishUI then
+					local mainPanel = fishUI:FindFirstChild("MainPanel")
+					if mainPanel then mainPanel.Visible = false end
+				end
+			end
+		end
+	end)
+end
 
 print("🎣 Fishing System Handler Loaded!")

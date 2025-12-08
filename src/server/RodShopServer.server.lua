@@ -41,6 +41,7 @@ local getShopDataFunc = createRemote("GetShopData", true)
 local buyRodEvent = createRemote("BuyRod", false)
 local buyFloaterEvent = createRemote("BuyFloater", false)
 local equipRodEvent = createRemote("EquipRod", false)
+local unequipRodEvent = createRemote("UnequipRod", false) -- NEW: Unequip rod
 local equipFloaterEvent = createRemote("EquipFloater", false)
 local unequipFloaterEvent = createRemote("UnequipFloater", false)
 local getOwnedItemsFunc = createRemote("GetOwnedItems", true)
@@ -345,7 +346,57 @@ equipRodEvent.OnServerEvent:Connect(function(player, rodId)
 	print(string.format("🎣 [ROD SHOP] %s equipped %s", player.Name, rodData.DisplayName))
 end)
 
--- ==================== EQUIP FLOATER ====================
+-- ==================== UNEQUIP ROD ====================
+
+unequipRodEvent.OnServerEvent:Connect(function(player)
+	if not player or not player.Parent then return end
+	
+	local data = DataHandler:GetData(player)
+	if not data then
+		sendNotification(player, "Data not loaded!", "error", "❌")
+		return
+	end
+	
+	-- Set equipped rod to empty/nil
+	DataHandler:Set(player, "EquippedRod", "")
+	DataHandler:SavePlayer(player)
+	
+	-- Remove rod tools from player
+	local backpack = player:FindFirstChild("Backpack")
+	local character = player.Character
+	
+	if backpack then
+		for _, tool in ipairs(backpack:GetChildren()) do
+			if tool:IsA("Tool") and (tool.Name:find("FishingRod") or tool.Name:find("Rod")) then
+				tool:Destroy()
+			end
+		end
+	end
+	
+	if character then
+		local humanoid = character:FindFirstChild("Humanoid")
+		if humanoid then
+			humanoid:UnequipTools()
+		end
+		
+		for _, tool in ipairs(character:GetChildren()) do
+			if tool:IsA("Tool") and (tool.Name:find("FishingRod") or tool.Name:find("Rod")) then
+				tool:Destroy()
+			end
+		end
+	end
+	
+	-- Notify client that equipment changed
+	equipmentChangedEvent:FireClient(player, {
+		Type = "Rod",
+		RodId = nil,
+		EquippedRod = "",
+		EquippedFloater = data.EquippedFloater
+	})
+	
+	sendNotification(player, "Rod unequipped!", "info", "🎣")
+	print(string.format("🎣 [ROD SHOP] %s unequipped rod", player.Name))
+end)
 
 equipFloaterEvent.OnServerEvent:Connect(function(player, floaterId)
 	if not player or not player.Parent then return end

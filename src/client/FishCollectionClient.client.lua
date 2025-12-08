@@ -35,6 +35,11 @@ local currentSort = "Rarity"
 local fishInventoryData = nil
 local fishIndexData = nil
 
+-- ✅ NEW: Fish holding state
+local isHoldingFish = false
+local heldFishTool = nil
+local previouslyHeldRod = nil -- Remember rod before holding fish
+
 -- Colors
 local COLORS = {
 	Background = Color3.fromRGB(15, 25, 40),
@@ -354,6 +359,74 @@ discoveredLabel.TextSize = 16
 discoveredLabel.TextXAlignment = Enum.TextXAlignment.Right
 discoveredLabel.Parent = statsBar
 
+-- ==================== HOLD FISH FUNCTION ====================
+
+local function holdFish(fishId, fishName)
+	local character = player.Character
+	if not character then return end
+	
+	local humanoid = character:FindFirstChild("Humanoid")
+	local backpack = player:FindFirstChild("Backpack")
+	if not humanoid or not backpack then return end
+	
+	-- Check if already holding this fish
+	if isHoldingFish and heldFishTool and heldFishTool.Name == fishName then
+		-- Unequip fish
+		humanoid:UnequipTools()
+		
+		-- Don't destroy fish tool, just unequip
+		-- Re-equip previous rod if we had one
+		if previouslyHeldRod then
+			local rodTool = backpack:FindFirstChild(previouslyHeldRod)
+			if rodTool then
+				humanoid:EquipTool(rodTool)
+			end
+			previouslyHeldRod = nil
+		end
+		
+		isHoldingFish = false
+		heldFishTool = nil
+		print("🐟 [FISH COLLECTION] Unequipped fish:", fishName)
+		return
+	end
+	
+	-- Remember current rod if holding one
+	local currentTool = character:FindFirstChildOfClass("Tool")
+	if currentTool and currentTool.Name:find("FishingRod") then
+		previouslyHeldRod = currentTool.Name
+	elseif currentTool == nil then
+		previouslyHeldRod = nil -- No rod was held before
+	end
+	
+	-- Find fish tool in backpack
+	local fishTool = nil
+	for _, tool in ipairs(backpack:GetChildren()) do
+		if tool:IsA("Tool") and tool.Name == fishName then
+			fishTool = tool
+			break
+		end
+	end
+	
+	-- Also check character
+	if not fishTool then
+		for _, tool in ipairs(character:GetChildren()) do
+			if tool:IsA("Tool") and tool.Name == fishName then
+				fishTool = tool
+				break
+			end
+		end
+	end
+	
+	if fishTool then
+		humanoid:EquipTool(fishTool)
+		isHoldingFish = true
+		heldFishTool = fishTool
+		print("🐟 [FISH COLLECTION] Equipped fish:", fishName)
+	else
+		print("⚠️ [FISH COLLECTION] Fish tool not found:", fishName)
+	end
+end
+
 -- ==================== FISH CARD CREATION ====================
 
 local function createFishCard(fishData, isInventory, isDiscovered)
@@ -452,6 +525,29 @@ local function createFishCard(fishData, isInventory, isDiscovered)
 		unknownLabel.TextSize = 11
 		unknownLabel.TextXAlignment = Enum.TextXAlignment.Center
 		unknownLabel.Parent = card
+	end
+	
+	-- ✅ NEW: Click to hold fish (for inventory mode only)
+	if isInventory and fishData.Count and fishData.Count > 0 then
+		local clickBtn = Instance.new("TextButton")
+		clickBtn.Size = UDim2.new(1, 0, 1, 0)
+		clickBtn.BackgroundTransparency = 1
+		clickBtn.Text = ""
+		clickBtn.ZIndex = 10
+		clickBtn.Parent = card
+		
+		clickBtn.MouseButton1Click:Connect(function()
+			holdFish(fishData.FishId, fishData.Name)
+		end)
+		
+		-- Hover effect
+		clickBtn.MouseEnter:Connect(function()
+			TweenService:Create(card, TweenInfo.new(0.1), {BackgroundColor3 = COLORS.Accent}):Play()
+		end)
+		
+		clickBtn.MouseLeave:Connect(function()
+			TweenService:Create(card, TweenInfo.new(0.1), {BackgroundColor3 = COLORS.CardBg}):Play()
+		end)
 	end
 	
 	card.Parent = contentFrame

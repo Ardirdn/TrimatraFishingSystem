@@ -45,13 +45,17 @@ local function createFishTool(player, fishId, fishData)
 	-- Create Tool
 	local fishTool = Instance.new("Tool")
 	fishTool.Name = fishData.Name
-	fishTool.CanBeDropped = true
+	fishTool.CanBeDropped = false -- ✅ Can't drop fish
 	fishTool.RequiresHandle = true
-	fishTool.Grip = CFrame.new(0, -0.5, 0) * CFrame.Angles(math.rad(0), math.rad(90), math.rad(0))
+	fishTool.Grip = CFrame.new(0, -0.3, 0) * CFrame.Angles(math.rad(0), math.rad(90), math.rad(0))
 	
 	local handle = nil
+	
+	-- ✅ Search multiple locations for fish models (same as NewFishDiscoveryUi)
 	local FishModelsFolder = ReplicatedStorage:FindFirstChild("FishModels") 
 		or (ReplicatedStorage:FindFirstChild("Models") and ReplicatedStorage.Models:FindFirstChild("Fish"))
+		or (ReplicatedStorage:FindFirstChild("Assets") and ReplicatedStorage.Assets:FindFirstChild("FishModels"))
+		or workspace:FindFirstChild("FishModels")
 	
 	-- Try to load 3D model
 	if FishModelsFolder then
@@ -63,28 +67,50 @@ local function createFishTool(player, fishId, fishData)
 				local primaryPart = fishModel.PrimaryPart or fishModel:FindFirstChildWhichIsA("BasePart")
 				
 				if primaryPart then
-					-- Clone and flatten model
+					-- Clone model
 					local clonedModel = fishModel:Clone()
 					
-					-- Create container handle
+					-- ✅ FIX: Position model at origin first
+					if clonedModel:IsA("Model") then
+						clonedModel:PivotTo(CFrame.new(0, 0, 0))
+					end
+					
+					-- Create handle at same position as model center
 					handle = Instance.new("Part")
 					handle.Name = "Handle"
-					handle.Size = Vector3.new(1, 0.5, 2)
+					handle.Size = Vector3.new(0.5, 0.3, 1)
 					handle.Transparency = 1
 					handle.CanCollide = false
 					handle.Anchored = false
+					handle.Massless = true
+					handle.CanQuery = false
+					handle.CanTouch = false
+					handle.CFrame = CFrame.new(0, 0, 0) -- Same position as model
 					
-					-- Weld all parts to handle
+					-- Collect parts first, then weld and parent
+					local partsToWeld = {}
 					for _, part in pairs(clonedModel:GetDescendants()) do
 						if part:IsA("BasePart") then
-							local weld = Instance.new("WeldConstraint")
-							weld.Part0 = handle
-							weld.Part1 = part
-							weld.Parent = part
-							part.CanCollide = false
-							part.Anchored = false
-							part.Parent = handle
+							table.insert(partsToWeld, part)
 						end
+					end
+					
+					-- Weld each part to handle
+					for _, part in ipairs(partsToWeld) do
+						part.CanCollide = false
+						part.CanQuery = false
+						part.CanTouch = false
+						part.Massless = true
+						part.Anchored = false
+						
+						-- Create weld constraint (maintains relative position)
+						local weld = Instance.new("WeldConstraint")
+						weld.Part0 = handle
+						weld.Part1 = part
+						weld.Parent = part
+						
+						-- Parent to handle
+						part.Parent = handle
 					end
 					
 					clonedModel:Destroy()
@@ -92,6 +118,10 @@ local function createFishTool(player, fishId, fishData)
 			elseif fishModel:IsA("BasePart") then
 				handle = fishModel:Clone()
 				handle.Name = "Handle"
+				handle.CanCollide = false
+				handle.CanQuery = false
+				handle.CanTouch = false
+				handle.Massless = true
 			end
 		end
 	end
@@ -102,7 +132,7 @@ local function createFishTool(player, fishId, fishData)
 		handle = Instance.new("Part")
 		handle.Name = "Handle"
 		handle.Shape = Enum.PartType.Block
-		handle.Size = Vector3.new(0.8, 0.4, 1.5)
+		handle.Size = Vector3.new(0.6, 0.3, 1)
 		handle.Material = Enum.Material.SmoothPlastic
 		
 		local rarityColors = {
@@ -121,17 +151,26 @@ local function createFishTool(player, fishId, fishData)
 			pointLight.Brightness = 1.5
 			pointLight.Range = 6
 			pointLight.Parent = handle
-			
-			local sparkles = Instance.new("Sparkles")
-			sparkles.Parent = handle
 		end
 	end
 	
-	-- Ensure handle properties
+	-- ✅ CRITICAL: Ensure handle has no collision at all
 	handle.CanCollide = false
+	handle.CanQuery = false
+	handle.CanTouch = false
 	handle.Anchored = false
 	handle.Massless = true
 	handle.Parent = fishTool
+	
+	-- ✅ Double check all descendants
+	for _, part in pairs(fishTool:GetDescendants()) do
+		if part:IsA("BasePart") then
+			part.CanCollide = false
+			part.CanQuery = false
+			part.CanTouch = false
+			part.Massless = true
+		end
+	end
 	
 	-- Add to player's backpack
 	local backpack = player:WaitForChild("Backpack")

@@ -27,6 +27,7 @@ end
 
 local getOwnedItemsFunc = rodShopRemotes:WaitForChild("GetOwnedItems", 5)
 local equipRodEvent = rodShopRemotes:WaitForChild("EquipRod", 5)
+local unequipRodEvent = rodShopRemotes:WaitForChild("UnequipRod", 5) -- NEW
 local equipFloaterEvent = rodShopRemotes:WaitForChild("EquipFloater", 5)
 local unequipFloaterEvent = rodShopRemotes:WaitForChild("UnequipFloater", 5)
 local equipmentChangedEvent = rodShopRemotes:FindFirstChild("EquipmentChanged")
@@ -348,25 +349,27 @@ local function createRodCard(rodId, isEquipped)
 	rarityLabel.TextXAlignment = Enum.TextXAlignment.Center
 	rarityLabel.Parent = card
 	
-	-- Equip Button (SAME POSITION AS FISH PRICE)
-	local equipBtn = Instance.new("TextButton")
-	equipBtn.Size = UDim2.new(1, -10, 0, 22)
-	equipBtn.Position = UDim2.new(0, 5, 1, -26)
-	equipBtn.BackgroundColor3 = isEquipped and COLORS.Success or COLORS.Accent
-	equipBtn.BorderSizePixel = 0
-	equipBtn.Font = Enum.Font.GothamBold
-	equipBtn.Text = isEquipped and "✓ Equipped" or "Equip"
-	equipBtn.TextColor3 = COLORS.Text
-	equipBtn.TextSize = 10
-	equipBtn.Parent = card
+	-- Action Button (Equip/Unequip) - SAME AS FLOATER
+	local actionBtn = Instance.new("TextButton")
+	actionBtn.Size = UDim2.new(1, -10, 0, 22)
+	actionBtn.Position = UDim2.new(0, 5, 1, -26)
+	actionBtn.BackgroundColor3 = isEquipped and COLORS.Danger or COLORS.Accent
+	actionBtn.BorderSizePixel = 0
+	actionBtn.Font = Enum.Font.GothamBold
+	actionBtn.Text = isEquipped and "Unequip" or "Equip"
+	actionBtn.TextColor3 = COLORS.Text
+	actionBtn.TextSize = 10
+	actionBtn.Parent = card
 	
-	createCorner(5).Parent = equipBtn
+	createCorner(5).Parent = actionBtn
 	
-	if not isEquipped then
-		equipBtn.MouseButton1Click:Connect(function()
+	actionBtn.MouseButton1Click:Connect(function()
+		if isEquipped then
+			unequipRodEvent:FireServer()
+		else
 			equipRodEvent:FireServer(rodId)
-		end)
-	end
+		end
+	end)
 	
 	card.Parent = contentFrame
 	return card

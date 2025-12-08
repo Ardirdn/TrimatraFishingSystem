@@ -91,23 +91,32 @@ screenGui.ResetOnSpawn = false
 screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 screenGui.Parent = playerGui
 
--- ==================== FLOATING BUTTON ====================
+-- ==================== MOBILE RESPONSIVE DETECTION ====================
+local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+local screenSize = workspace.CurrentCamera.ViewportSize
+local isSmallScreen = screenSize.X < 800 or screenSize.Y < 600
+
+-- Responsive button size
+local buttonBaseSize = isMobile and 55 or 70
+local buttonHoverSize = isMobile and 62 or 80
+
+-- ==================== FLOATING BUTTON (RESPONSIVE) ====================
 
 local floatingButton = Instance.new("TextButton")
 floatingButton.Name = "FishButton"
-floatingButton.Size = UDim2.new(0, 70, 0, 70)
-floatingButton.Position = UDim2.new(0, 15, 0.5, 0)
+floatingButton.Size = UDim2.new(0, buttonBaseSize, 0, buttonBaseSize)
+floatingButton.Position = UDim2.new(0, 10, 0.5, 0)
 floatingButton.BackgroundColor3 = COLORS.Accent
 floatingButton.BorderSizePixel = 0
 floatingButton.Text = ""
 floatingButton.AutoButtonColor = false
 floatingButton.Parent = screenGui
 
-createCorner(35).Parent = floatingButton
+createCorner(buttonBaseSize/2).Parent = floatingButton
 
 local buttonStroke = Instance.new("UIStroke")
 buttonStroke.Color = Color3.fromRGB(80, 180, 240)
-buttonStroke.Thickness = 3
+buttonStroke.Thickness = isMobile and 2 or 3
 buttonStroke.Parent = floatingButton
 
 local buttonIcon = Instance.new("TextLabel")
@@ -117,7 +126,8 @@ buttonIcon.BackgroundTransparency = 1
 buttonIcon.Font = Enum.Font.GothamBlack
 buttonIcon.Text = "🐟"
 buttonIcon.TextColor3 = COLORS.Text
-buttonIcon.TextSize = 28
+buttonIcon.TextSize = isMobile and 22 or 28
+buttonIcon.TextScaled = isMobile
 buttonIcon.Parent = floatingButton
 
 local buttonText = Instance.new("TextLabel")
@@ -127,29 +137,44 @@ buttonText.BackgroundTransparency = 1
 buttonText.Font = Enum.Font.GothamBold
 buttonText.Text = "Fish"
 buttonText.TextColor3 = COLORS.Text
-buttonText.TextSize = 10
+buttonText.TextSize = isMobile and 8 or 10
+buttonText.TextScaled = isMobile
 buttonText.Parent = floatingButton
 
--- Hover effect
-floatingButton.MouseEnter:Connect(function()
-	TweenService:Create(floatingButton, TweenInfo.new(0.2), {Size = UDim2.new(0, 80, 0, 80)}):Play()
-end)
+-- Hover effect (desktop only)
+if not isMobile then
+	floatingButton.MouseEnter:Connect(function()
+		TweenService:Create(floatingButton, TweenInfo.new(0.2), {Size = UDim2.new(0, buttonHoverSize, 0, buttonHoverSize)}):Play()
+	end)
 
-floatingButton.MouseLeave:Connect(function()
-	TweenService:Create(floatingButton, TweenInfo.new(0.2), {Size = UDim2.new(0, 70, 0, 70)}):Play()
-end)
+	floatingButton.MouseLeave:Connect(function()
+		TweenService:Create(floatingButton, TweenInfo.new(0.2), {Size = UDim2.new(0, buttonBaseSize, 0, buttonBaseSize)}):Play()
+	end)
+end
 
--- ==================== MAIN PANEL ====================
+-- ==================== MAIN PANEL (RESPONSIVE) ====================
+
+-- Responsive panel size
+local panelWidth = isMobile and 0.95 or 0 -- Scale for mobile, fixed for desktop
+local panelWidthOffset = isMobile and 0 or 550
+local panelHeight = isMobile and 0.85 or 0
+local panelHeightOffset = isMobile and 0 or 600
 
 local mainPanel = Instance.new("Frame")
 mainPanel.Name = "MainPanel"
-mainPanel.Size = UDim2.new(0, 550, 0, 600)
+mainPanel.Size = UDim2.new(panelWidth, panelWidthOffset, panelHeight, panelHeightOffset)
 mainPanel.Position = UDim2.new(0.5, 0, 0.5, 0)
 mainPanel.AnchorPoint = Vector2.new(0.5, 0.5)
 mainPanel.BackgroundColor3 = COLORS.Background
 mainPanel.BorderSizePixel = 0
 mainPanel.Visible = false
 mainPanel.Parent = screenGui
+
+-- Size constraint for mobile
+local sizeConstraint = Instance.new("UISizeConstraint")
+sizeConstraint.MinSize = Vector2.new(320, 400)
+sizeConstraint.MaxSize = Vector2.new(600, 700)
+sizeConstraint.Parent = mainPanel
 
 createCorner(16).Parent = mainPanel
 

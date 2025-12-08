@@ -120,7 +120,7 @@ screenGui.Parent = playerGui
 
 local shopPanel = Instance.new("Frame")
 shopPanel.Name = "ShopPanel"
-shopPanel.Size = UDim2.new(0, 600, 0, 600)
+shopPanel.Size = UDim2.new(0.5, 0, 0.8, 0)
 shopPanel.Position = UDim2.new(0.5, 0, 0.5, 0)
 shopPanel.AnchorPoint = Vector2.new(0.5, 0.5)
 shopPanel.BackgroundColor3 = COLORS.Background

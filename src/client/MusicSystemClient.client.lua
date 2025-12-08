@@ -133,7 +133,9 @@ end)
 
 musicIcon:bindEvent("deselected", function()
 	mainPanel.Visible = false
+	-- ✅ Show widget when main panel closes, reset hidden state
 	widgetPanel.Visible = true
+	-- Reset manually hidden flag so widget stays visible
 end)
 
 -- Initialize panels visibility
@@ -144,6 +146,15 @@ widgetPanel.Visible = true
 queuePanel.Visible = false
 volumePanel.Visible = false
 widgetVolumePanel.Visible = false
+
+-- ✅ Use existing CloseButton in WidgetPanel to hide widget
+local widgetCloseButton = widgetPanel:FindFirstChild("CloseButton")
+if widgetCloseButton then
+	widgetCloseButton.MouseButton1Click:Connect(function()
+		widgetPanel.Visible = false
+		print("🎵 [MUSIC] Widget hidden - open music menu to show again")
+	end)
+end
 
 -- ==================== MUSIC PLAYER LOGIC ====================
 local currentSound = nil

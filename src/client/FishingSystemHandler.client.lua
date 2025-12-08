@@ -177,8 +177,8 @@ assert(fillBar, "ERROR: Fillbar not found! Periksa struktur dan penamaan GUI")
 
 local initialScale = 0.4
 local maxScale = 1
-local tapIncrease = 0.08
-local decayRate = 0.3 -- per detik, bisa diadjust
+local tapIncrease = 0.08  -- Original value
+local decayRate = 0.3 -- per detik
 local timeLimit = 7 -- detik
 local progress = initialScale
 local isPulling = false
@@ -1174,6 +1174,18 @@ local function startPulling()
 	startTime = tick()
 	print("🎣 STRIKE! Ikan melawan!")
 	
+	-- ✅ AUTO CLOSE ALL UIs WHEN TAPTAP STARTS (keep screen clean)
+	if _G.closeAllUIsOnFishCaught then
+		_G.closeAllUIsOnFishCaught()
+	end
+	
+	-- ✅ FIX: Freeze player movement during pulling/taptap
+	if Humanoid then
+		Humanoid.WalkSpeed = 0
+		Humanoid.JumpPower = 0
+		print("🚫 [FISHING] Player movement frozen during pulling")
+	end
+	
 	if cameraShakeEnabled then
 		startCameraShake()
 	end
@@ -1348,6 +1360,13 @@ local function startPulling()
 
 			isPulling = false
 			isFishing = false
+			
+			-- ✅ Restore player movement after pulling ends (FAIL)
+			if Humanoid then
+				Humanoid.WalkSpeed = 16
+				Humanoid.JumpPower = 50
+				print("✅ [FISHING] Player movement restored (pull failed)")
+			end
 
 			if inputConn then
 				inputConn:Disconnect()
@@ -1370,6 +1389,8 @@ local function startPulling()
 		if progress >= maxScale then
 			print("berhasil mendapatkan ikan")
 
+			-- (UIs sudah di-close saat pulling start)
+
 			-- FIRE TO SERVER (RemoteEvent)
 			local FishingSuccessEvent = ReplicatedStorage:FindFirstChild("FishingSuccessEvent")
 			if FishingSuccessEvent then
@@ -1389,6 +1410,13 @@ local function startPulling()
 
 			isPulling = false
 			isFishing = false
+			
+			-- ✅ Restore player movement after pulling ends (SUCCESS)
+			if Humanoid then
+				Humanoid.WalkSpeed = 16
+				Humanoid.JumpPower = 50
+				print("✅ [FISHING] Player movement restored (pull success)")
+			end
 
 			if inputConn then
 				inputConn:Disconnect()
@@ -1588,12 +1616,41 @@ local function startBobbing()
 		-- Get current floater position
 		local currentPos = currentFloater:IsA("Model") and currentFloater.PrimaryPart.Position or currentFloater.Position
 		
-		-- ✅ NEW: Recheck water status periodically
+		-- ✅ FIX #5: DISTANCE CHECK FIRST (before water check)
+		-- This ensures auto-retrieve works even when floater is not in water
+		if Character and Character.PrimaryPart and edgePart then
+			local playerPos = Character.PrimaryPart.Position
+			local floaterPos = currentPos
+
+			local horizontalDistance = (Vector3.new(playerPos.X, 0, playerPos.Z) - Vector3.new(floaterPos.X, 0, floaterPos.Z)).Magnitude
+			local maxAllowedDistance = currentConfig.MaxThrowDistance * 1.3
+
+			-- AUTO RETRIEVE if too far (regardless of water status)
+			if horizontalDistance > maxAllowedDistance then
+				if not isPulling then
+					print("🎣 Too far! Auto-retrieving... Distance:", math.floor(horizontalDistance))
+
+					if bobConnection then
+						bobConnection:Disconnect()
+						bobConnection = nil
+					end
+
+					isFloating = false
+					if isFishing then
+						isFishing = false
+						retrieveFloater()
+					end
+					return
+				end
+			end
+		end
+		
+		-- ✅ Recheck water status periodically
 		floaterInWater = isPositionInWater(currentPos)
 		
 		-- ✅ Only do bobbing and fish detection if in water
 		if not floaterInWater then
-			-- Floater not in water - just stay still, no fish
+			-- Floater not in water - just stay still, no fish, but keep distance check running
 			isFloating = false
 			return
 		end
@@ -1623,45 +1680,6 @@ local function startBobbing()
 		end
 
 		updateBaitLine()
-
-		-- DISTANCE CHECK
-		if Character and Character.PrimaryPart and edgePart then
-			local playerPos = Character.PrimaryPart.Position
-			local floaterPos = currentFloater:IsA("Model") and currentFloater.PrimaryPart.Position or currentFloater.Position
-
-			local horizontalDistance = (Vector3.new(playerPos.X, 0, playerPos.Z) - Vector3.new(floaterPos.X, 0, floaterPos.Z)).Magnitude
-
-			local warningDistance = currentConfig.MaxThrowDistance * 1.15 -- Warning di 1.2x
-			local maxAllowedDistance = currentConfig.MaxThrowDistance * 1.3 -- Auto retrieve di 1.5x
-
-			-- Warning
-			if horizontalDistance > warningDistance and not distanceWarned then
-				warn("⚠️ Getting too far from floater! Distance:", math.floor(horizontalDistance))
-				distanceWarned = true
-			end
-
-			if horizontalDistance <= warningDistance and distanceWarned then
-				distanceWarned = false
-			end
-
-			-- AUTO RETRIEVE
-			if horizontalDistance > maxAllowedDistance then
-				if not isPulling then
-					print("🎣 Line snapped! Auto-retrieving...")
-
-					if bobConnection then
-						bobConnection:Disconnect()
-						bobConnection = nil
-					end
-
-					isFloating = false
-					if isFishing then
-						isFishing = false
-						retrieveFloater()
-					end
-				end
-			end
-		end
 	end)
 end
 
@@ -1669,6 +1687,20 @@ end
 local isThrowing = false
 
 local function throwFloater()
+	-- ✅ FIX #4: Check if character exists (may not exist right after respawn)
+	if not Character or not Character.Parent then
+		warn("[FISHING] Character not available, cannot throw")
+		return
+	end
+	
+	if not HRP or not HRP.Parent then
+		HRP = Character:FindFirstChild("HumanoidRootPart")
+		if not HRP then
+			warn("[FISHING] HumanoidRootPart not available, cannot throw")
+			return
+		end
+	end
+	
 	-- ✅ FIXED: Reset stuck states first (no floater = reset states)
 	if not currentFloater then
 		if isFloating then
@@ -1971,9 +2003,123 @@ end
 
 local function stopAfkLoop()
 	afkMode = false
+	_G.afkMode = false
 end
 
+-- Expose functions globally
 _G.startAfkLoop = startAfkLoop
+_G.stopAfkLoop = stopAfkLoop
+
+-- ✅ Toggle AFK function for button
+local function toggleAfkMode()
+	afkMode = not afkMode
+	_G.afkMode = afkMode
+	
+	if afkMode then
+		print("🤖 [AFK] AFK Mode ENABLED")
+		startAfkLoop()
+	else
+		print("🤖 [AFK] AFK Mode DISABLED")
+		stopAfkLoop()
+	end
+	
+	return afkMode
+end
+
+_G.toggleAfkMode = toggleAfkMode
+
+-- ✅ CREATE AFK BUTTON (Mobile Compatible)
+local function createAfkButton()
+	local playerGui = Player:WaitForChild("PlayerGui")
+	
+	-- ✅ Remove ANY old AFK GUIs (switch, button, etc)
+	local existingGui = playerGui:FindFirstChild("AfkButtonGUI")
+	if existingGui then existingGui:Destroy() end
+	
+	local oldSwitchGui = playerGui:FindFirstChild("AfkSwitchGUI")
+	if oldSwitchGui then oldSwitchGui:Destroy() end
+	
+	-- Also check for any GUI with "Afk" in name
+	for _, gui in ipairs(playerGui:GetChildren()) do
+		if gui:IsA("ScreenGui") and (gui.Name:lower():find("afk") or gui.Name:lower():find("switch")) then
+			if gui.Name ~= "AfkButtonGUI" then
+				gui:Destroy()
+			end
+		end
+	end
+	
+	local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+	local buttonSize = isMobile and 50 or 60
+	
+	local screenGui = Instance.new("ScreenGui")
+	screenGui.Name = "AfkButtonGUI"
+	screenGui.ResetOnSpawn = false
+	screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	screenGui.Parent = playerGui
+	
+	local afkButton = Instance.new("TextButton")
+	afkButton.Name = "AfkButton"
+	afkButton.Size = UDim2.new(0, buttonSize, 0, buttonSize)
+	afkButton.Position = UDim2.new(0, 10, 0.6, 0)
+	afkButton.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+	afkButton.BorderSizePixel = 0
+	afkButton.Text = ""
+	afkButton.AutoButtonColor = false
+	afkButton.Parent = screenGui
+	
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, buttonSize/2)
+	corner.Parent = afkButton
+	
+	local stroke = Instance.new("UIStroke")
+	stroke.Color = Color3.fromRGB(100, 100, 100)
+	stroke.Thickness = isMobile and 2 or 3
+	stroke.Parent = afkButton
+	
+	local icon = Instance.new("TextLabel")
+	icon.Size = UDim2.new(1, 0, 0.6, 0)
+	icon.Position = UDim2.new(0, 0, 0.05, 0)
+	icon.BackgroundTransparency = 1
+	icon.Font = Enum.Font.GothamBlack
+	icon.Text = "🤖"
+	icon.TextColor3 = Color3.fromRGB(255, 255, 255)
+	icon.TextSize = isMobile and 20 or 24
+	icon.TextScaled = isMobile
+	icon.Parent = afkButton
+	
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.new(1, 0, 0.35, 0)
+	label.Position = UDim2.new(0, 0, 0.6, 0)
+	label.BackgroundTransparency = 1
+	label.Font = Enum.Font.GothamBold
+	label.Text = "AFK"
+	label.TextColor3 = Color3.fromRGB(255, 255, 255)
+	label.TextSize = isMobile and 8 or 10
+	label.TextScaled = isMobile
+	label.Parent = afkButton
+	
+	local function updateButtonVisual()
+		if afkMode then
+			afkButton.BackgroundColor3 = Color3.fromRGB(0, 180, 80)
+			stroke.Color = Color3.fromRGB(0, 220, 100)
+		else
+			afkButton.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+			stroke.Color = Color3.fromRGB(100, 100, 100)
+		end
+	end
+	
+	-- ✅ Support both mouse AND touch
+	afkButton.MouseButton1Click:Connect(function()
+		toggleAfkMode()
+		updateButtonVisual()
+	end)
+	
+	print("✅ [FISHING] AFK Button created")
+	return screenGui
+end
+
+-- Create AFK button after setup
+task.delay(2, createAfkButton)
 
 local function onMouseClick()
 	print(string.format(
@@ -2086,6 +2232,40 @@ end
 
 
 local function onToolUnequipped()
+	print("🔄 [FISHING] Tool unequipped, canceling all states...")
+	
+	-- ✅ FIX: Force cancel pulling immediately
+	if isPulling then
+		print("⚠️ [FISHING] Force canceling pulling state!")
+		isPulling = false
+		pullingStarted = false
+		
+		-- Hide pull UI
+		if pullFrame then
+			pullFrame.Visible = false
+		end
+		
+		-- Stop pull camera and restore normal camera IMMEDIATELY
+		stopPullCamera()
+		
+		-- Force restore camera to normal (in case tween fails)
+		task.delay(0.1, function()
+			camera.CameraType = Enum.CameraType.Custom
+			camera.CameraSubject = Character and Character:FindFirstChild("Humanoid") or nil
+		end)
+		
+		-- Restore player movement
+		if Humanoid then
+			Humanoid.WalkSpeed = 16 -- Default walk speed
+			Humanoid.JumpPower = 50 -- Default jump power
+		end
+		
+		-- Stop animations
+		if pullingAnimation and pullingAnimation.IsPlaying then
+			pullingAnimation:Stop()
+		end
+	end
+	
 	if isFishing then
 		retrieveFloater()
 	end
@@ -2096,6 +2276,15 @@ local function onToolUnequipped()
 	currentConfig = nil
 	edgePart = nil
 	isFishing = false
+	isPulling = false
+	isThrowing = false
+	isFloating = false
+	
+	-- Restore movement (in case it was frozen)
+	if Humanoid then
+		Humanoid.WalkSpeed = 16
+		Humanoid.JumpPower = 50
+	end
 end
 
 
@@ -2103,6 +2292,7 @@ end
 local function setupCharacterMonitor()
 	Character = Player.Character or Player.CharacterAdded:Wait()
 	Humanoid = Character:WaitForChild("Humanoid")
+	HRP = Character:WaitForChild("HumanoidRootPart")
 
 	Character.ChildAdded:Connect(function(child)
 		if child:IsA("Tool") then
@@ -2129,19 +2319,93 @@ end
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	if gameProcessed then return end
 
-	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+	-- ✅ FIX: Support both Mouse AND Touch for Android
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 		onMouseClick()
 	end
 end)
 
+-- ✅ FIX #4: Complete state reset on respawn/death
 Player.CharacterAdded:Connect(function(newCharacter)
+	print("🔄 [FISHING] Character respawned, resetting all state...")
+	
+	-- Update character references
 	Character = newCharacter
+	HRP = newCharacter:WaitForChild("HumanoidRootPart", 5)
+	Humanoid = newCharacter:WaitForChild("Humanoid", 5)
+	
+	-- Disconnect all connections safely
+	if bobConnection then
+		pcall(function() bobConnection:Disconnect() end)
+		bobConnection = nil
+	end
+	if beamUpdateConnection then
+		pcall(function() beamUpdateConnection:Disconnect() end)
+		beamUpdateConnection = nil
+	end
+	if pullConnection then
+		pcall(function() pullConnection:Disconnect() end)
+		pullConnection = nil
+	end
+	
+	-- Cleanup all visuals
 	cleanupFishing()
+	cleanupAnimations()
+	
+	-- ✅ FIX: Force stop pull camera and restore normal camera on respawn
+	stopPullCamera()
+	task.delay(0.2, function()
+		camera.CameraType = Enum.CameraType.Custom
+		if newCharacter:FindFirstChild("Humanoid") then
+			camera.CameraSubject = newCharacter.Humanoid
+		end
+	end)
+	
+	-- ✅ FIX: Hide pull UI if visible
+	if pullFrame then
+		pullFrame.Visible = false
+	end
+	
+	-- Reset ALL state variables
 	isFishing = false
+	isThrowing = false
+	isFloating = false
+	isPulling = false
+	pullingStarted = false
+	distanceWarned = false
+	floaterInWater = false
+	
 	currentTool = nil
 	currentConfig = nil
 	edgePart = nil
+	currentFloater = nil
+	
+	-- Reset animation references
+	throwAnimation = nil
+	idleAnimation = nil
+	pullingAnimation = nil
+	catchAnimation = nil
+	animator = nil
+	
+	-- Reset timer variables
+	pullTimerElapsed = 0
+	pullAutoTimer = 0
+	
+	-- Notify server that fishing stopped
+	notifyReplication("NotifyStopFishing")
+	
+	-- ✅ FIX: Restore player movement on respawn (in case character died while pulling)
+	task.delay(0.5, function()
+		if Humanoid then
+			Humanoid.WalkSpeed = 16
+			Humanoid.JumpPower = 50
+		end
+	end)
+	
+	-- Re-setup character monitor
 	setupCharacterMonitor()
+	
+	print("✅ [FISHING] State reset complete")
 end)
 
 setupCharacterMonitor()
@@ -2184,33 +2448,138 @@ task.spawn(function()
 	end
 end)
 
--- ==================== NEW FISH EVENT LISTENER ====================
-local FishCaughtEvent = ReplicatedStorage:FindFirstChild("FishCaughtEvent")
-if FishCaughtEvent then
-	FishCaughtEvent.OnClientEvent:Connect(function(data)
-		if data and data.IsNewDiscovery then
-			print("🐟 [FISHING] New fish discovered! Setting flag for AFK mode...")
-			isNewFishUIVisible = true
-			lastNewFishTime = tick()
-			
-			-- Auto close other UIs if new fish is caught (only for rare+ fish)
-			local rarity = data.FishData and data.FishData.Rarity
-			if rarity and (rarity == "Rare" or rarity == "Epic" or rarity == "Legendary" or rarity == "Mythic") then
-				-- Close Equipment and Fish Collection UIs
-				local playerGui = player.PlayerGui
-				local equipUI = playerGui:FindFirstChild("EquipmentGUI")
-				local fishUI = playerGui:FindFirstChild("FishCollectionGUI")
-				
-				if equipUI then
-					local mainPanel = equipUI:FindFirstChild("MainPanel")
-					if mainPanel then mainPanel.Visible = false end
+-- ==================== AUTO-CLOSE UI FUNCTION ====================
+local function closeAllUIsOnFishCaught()
+	print("🐟 [FISHING] Closing all UIs (fish caught/pulling success)...")
+	
+	local playerGui = player.PlayerGui
+	local closedCount = 0
+	
+	-- List of all UIs to close (except Music Widget)
+	-- Note: Some GUIs use different names (RedeemGui vs RedeemGUI)
+	local uisToClose = {
+		{gui = "EquipmentGUI", panel = "MainPanel"},
+		{gui = "FishCollectionGUI", panel = "MainPanel"},
+		{gui = "FishermanShopGUI", panel = "ShopPanel"},
+		{gui = "RodShopGUI", panel = "MainPanel"},
+		{gui = "InventoryGUI", panel = "MainPanel"},
+		-- TopbarPlus UIs (need to disable ScreenGui.Enabled)
+		{gui = "RedeemGui", panel = "MainPanel", disableGui = true},
+		{gui = "DonateGUI", panel = "MainPanel", disableGui = true},
+		{gui = "ShopGUI", panel = "MainPanel", disableGui = true},
+		-- Music main panel (but NOT widget)
+		{gui = "MusicPlayer", panel = "MainPanel"},
+		{gui = "MusicPlayer", panel = "MyLibraryPanel"},
+		{gui = "MusicPlayer", panel = "PlaylistPopupPanel"},
+	}
+	
+	print("  📋 [DEBUG] Checking", #uisToClose, "UI configurations...")
+	
+	for _, uiInfo in ipairs(uisToClose) do
+		local gui = playerGui:FindFirstChild(uiInfo.gui)
+		if gui then
+			local panel = gui:FindFirstChild(uiInfo.panel)
+			if panel then
+				if panel:IsA("GuiObject") then
+					if panel.Visible then
+						panel.Visible = false
+						-- Also disable ScreenGui for TopbarPlus panels
+						if uiInfo.disableGui and gui:IsA("ScreenGui") then
+							gui.Enabled = false
+						end
+						closedCount = closedCount + 1
+						print("  ✅ [CLOSED]", uiInfo.gui, "/", uiInfo.panel)
+					else
+						print("  ⚪ [ALREADY HIDDEN]", uiInfo.gui, "/", uiInfo.panel)
+					end
 				end
-				
-				if fishUI then
-					local mainPanel = fishUI:FindFirstChild("MainPanel")
-					if mainPanel then mainPanel.Visible = false end
+			else
+				print("  ⚠️ [PANEL NOT FOUND]", uiInfo.gui, "/", uiInfo.panel)
+			end
+		end
+	end
+	
+	-- ✅ TopbarPlus icons - try to deselect all active icons
+	-- TopbarPlus stores icons in a global table
+	local IconModule = ReplicatedStorage:FindFirstChild("Icon")
+	if IconModule then
+		local success, iconLib = pcall(function()
+			return require(IconModule)
+		end)
+		
+		if success and iconLib and iconLib.getIcons then
+			local getIconsSuccess, icons = pcall(function()
+				return iconLib.getIcons()
+			end)
+			
+			if getIconsSuccess and icons then
+				for _, icon in pairs(icons) do
+					-- isSelected can be a property OR a method, handle both
+					local isSelected = false
+					pcall(function()
+						if type(icon.isSelected) == "function" then
+							isSelected = icon:isSelected()
+						elseif type(icon.isSelected) == "boolean" then
+							isSelected = icon.isSelected
+						end
+					end)
+					
+					if isSelected and icon.deselect then
+						pcall(function()
+							icon:deselect()
+							closedCount = closedCount + 1
+							print("  ✅ [DESELECTED] TopbarPlus icon")
+						end)
+					end
 				end
 			end
+		end
+	end
+	
+	print("🐟 [FISHING] Closed", closedCount, "UI panels")
+end
+
+-- Expose globally so pulling success can call it
+_G.closeAllUIsOnFishCaught = closeAllUIsOnFishCaught
+
+-- ==================== FISH CAUGHT EVENT LISTENER ====================
+local FishCaughtEvent = ReplicatedStorage:FindFirstChild("FishCaughtEvent")
+
+print("🔍 [DEBUG] Looking for FishCaughtEvent...")
+if FishCaughtEvent then
+	print("✅ [DEBUG] FishCaughtEvent FOUND!")
+	FishCaughtEvent.OnClientEvent:Connect(function(data)
+		print("🐟 [FISHING] FishCaughtEvent RECEIVED!")
+		
+		if data and data.IsNewDiscovery then
+			isNewFishUIVisible = true
+			lastNewFishTime = tick()
+			print("  🆕 [DEBUG] New fish discovery flag set")
+		end
+		
+		-- Auto close all UIs
+		closeAllUIsOnFishCaught()
+	end)
+else
+	print("⚠️ [DEBUG] FishCaughtEvent NOT FOUND in ReplicatedStorage!")
+	
+	-- Try WaitForChild with timeout
+	task.spawn(function()
+		local event = ReplicatedStorage:WaitForChild("FishCaughtEvent", 10)
+		if event then
+			print("✅ [DEBUG] FishCaughtEvent found after wait!")
+			event.OnClientEvent:Connect(function(data)
+				print("🐟 [FISHING] FishCaughtEvent RECEIVED (delayed)!")
+				
+				if data and data.IsNewDiscovery then
+					isNewFishUIVisible = true
+					lastNewFishTime = tick()
+				end
+				
+				closeAllUIsOnFishCaught()
+			end)
+		else
+			print("❌ [DEBUG] FishCaughtEvent still not found after 10s wait!")
 		end
 	end)
 end

@@ -1,13 +1,10 @@
 --[[
-	FISHING REPLICATION CLIENT (OPTIMIZED v2)
-	ALL ANIMATION RUNS LOCALLY - No network position updates!
+	FISHING REPLICATION CLIENT (v3 - BUG FIXES)
 	
-	FEATURES:
-	- Throw animation with parabolic arc (same as local player)
-	- Line appears immediately when throw starts
-	- Wind animation on fishing line
-	- Surface clamping for realistic line behavior
-	- Distance-based optimization
+	FIXES:
+	1. Line tegang saat pulling (tidak menggantung ke air)
+	2. Exclude semua floater dari surface detection
+	3. Animasi ikan bergerak saat pulling
 ]]
 
 local Players = game:GetService("Players")
@@ -30,9 +27,15 @@ local Config = {
 	BobSpeed = 2,
 	BobHeight = 0.15,
 	ThrowDuration = 1.5,
+	
+	-- Pulling config
+	PullMoveSpeed = 8,
+	PullMoveRange = 12,
+	PullVerticalSpeed = 6,
+	PullVerticalDepth = 2,
 }
 
--- Wind settings (stronger for visibility)
+-- Wind settings
 local WindSettings = {
 	SwayStrength = 1.2,
 	WindSpeed1 = 2.5,
@@ -59,7 +62,7 @@ local ThrowFloaterEvent = FishingRemotes:WaitForChild("ThrowFloater", 5)
 local StartPullingEvent = FishingRemotes:WaitForChild("StartPulling", 5)
 local StopFishingEvent = FishingRemotes:WaitForChild("StopFishing", 5)
 
-print("✅ [FISHING REPLICATION CLIENT] RemoteEvents found (v2)")
+print("✅ [FISHING REPLICATION CLIENT] RemoteEvents found (v3)")
 
 -- ============================================
 -- RESOURCES
@@ -89,6 +92,11 @@ local function getPlayerData(player)
 			ThrowTargetPos = nil,
 			ThrowHeight = 8,
 			ThrowStartTime = 0,
+			
+			-- Pull animation
+			PullStartPos = nil,
+			PullTargetPos = nil,
+			PullTime = 0,
 			
 			-- Animation
 			AnimationConnection = nil,
@@ -162,7 +170,7 @@ local function getPlayerRodTip(player)
 end
 
 -- ============================================
--- PARABOLIC POSITION (same as local player)
+-- PARABOLIC POSITION
 -- ============================================
 local function calculateParabolicPosition(startPos, targetPos, height, alpha)
 	local x = startPos.X + (targetPos.X - startPos.X) * alpha
@@ -229,7 +237,6 @@ end
 local function createFishingLine(player, lineStyle)
 	local data = getPlayerData(player)
 	
-	-- Cleanup old
 	for _, seg in ipairs(data.LineSegments) do
 		if seg and seg.Part then pcall(function() seg.Part:Destroy() end) end
 	end
@@ -247,7 +254,6 @@ local function createFishingLine(player, lineStyle)
 	
 	data.LineStyle = { Color = color, Width = width }
 	
-	-- Create start part
 	local startPart = Instance.new("Part")
 	startPart.Size = Vector3.new(0.1, 0.1, 0.1)
 	startPart.Anchored = true
@@ -260,7 +266,6 @@ local function createFishingLine(player, lineStyle)
 	local startAtt = Instance.new("Attachment")
 	startAtt.Parent = startPart
 	
-	-- Create middle segments
 	local segments = {}
 	for i = 1, Config.NumLineSegments do
 		local part = Instance.new("Part")
@@ -278,7 +283,6 @@ local function createFishingLine(player, lineStyle)
 	end
 	data.LineSegments = segments
 	
-	-- End attachment on floater
 	local floater = data.Floater
 	local endParent = nil
 	if floater then
@@ -294,7 +298,6 @@ local function createFishingLine(player, lineStyle)
 		endAtt.Parent = endParent
 	end
 	
-	-- Create beams
 	local allAttachments = {startAtt}
 	for _, seg in ipairs(segments) do
 		table.insert(allAttachments, seg.Attachment)
@@ -323,14 +326,42 @@ local function createFishingLine(player, lineStyle)
 end
 
 -- ============================================
--- SURFACE DETECTION (for line clamping)
+-- SURFACE DETECTION (FIXED: Exclude ALL floaters AND ALL characters)
 -- ============================================
 local function getSurfaceY(position, player)
 	local data = OtherPlayersFishing[player]
-	if not data then return nil end
+	
+	-- Collect ALL objects to exclude
+	local excludeList = {}
+	
+	-- Exclude ALL player characters (not just fishing player)
+	for _, p in ipairs(Players:GetPlayers()) do
+		if p.Character then
+			table.insert(excludeList, p.Character)
+		end
+	end
+	
+	-- Exclude ALL replicated floaters in workspace
+	for _, obj in ipairs(workspace:GetChildren()) do
+		if obj.Name:find("ReplicatedFloater") or obj.Name == "Floater" then
+			table.insert(excludeList, obj)
+		end
+	end
+	
+	-- Exclude this player's floater
+	if data and data.Floater then
+		table.insert(excludeList, data.Floater)
+	end
+	
+	-- Exclude all line parts
+	for _, obj in ipairs(workspace:GetChildren()) do
+		if obj.Name:find("ReplicatedLine") or obj.Name:find("ReplicatedRope") or obj.Name:find("RopePart") then
+			table.insert(excludeList, obj)
+		end
+	end
 	
 	local rayParams = RaycastParams.new()
-	rayParams.FilterDescendantsInstances = {player.Character, data.Floater}
+	rayParams.FilterDescendantsInstances = excludeList
 	rayParams.FilterType = Enum.RaycastFilterType.Exclude
 	
 	local rayOrigin = Vector3.new(position.X, 200, position.Z)
@@ -354,7 +385,12 @@ local function startAnimation(player)
 	
 	local windTime = 0
 	local bobTime = 0
+	local pullTime = 0
 	local frameCount = 0
+	
+	-- Pull movement variables
+	local pullMoveTarget = nil
+	local pullMoveStartPos = nil
 	
 	data.AnimationConnection = RunService.Heartbeat:Connect(function(dt)
 		frameCount = frameCount + 1
@@ -409,20 +445,20 @@ local function startAnimation(player)
 			if beam then beam.Enabled = true end
 		end
 		
-		-- Get rod tip position
+		-- Get rod tip
 		local rodTip = getPlayerRodTip(player)
 		if not rodTip then
 			cleanupPlayerFishing(player)
 			return
 		end
 		
-		-- Update line start
 		if data.LineStartPart then
 			data.LineStartPart.Position = rodTip
 		end
 		
 		windTime = windTime + dt
 		bobTime = bobTime + dt
+		pullTime = pullTime + dt
 		
 		-- === THROWING PHASE ===
 		if data.IsThrowing then
@@ -452,8 +488,63 @@ local function startAnimation(player)
 				data.FloaterBasePos = data.ThrowTargetPos
 			end
 		
+		-- === PULLING PHASE (FIX #1 & #3: Animate fish fighting) ===
+		elseif data.IsPulling then
+			pullTime = pullTime + dt
+			
+			-- Initialize pull target if needed
+			if not pullMoveTarget or not data.PullStartPos then
+				data.PullStartPos = data.FloaterBasePos or floaterPos
+				pullMoveStartPos = data.PullStartPos
+				pullMoveTarget = data.PullStartPos + Vector3.new(
+					math.random(-Config.PullMoveRange, Config.PullMoveRange),
+					0,
+					math.random(-Config.PullMoveRange, Config.PullMoveRange)
+				)
+			end
+			
+			-- Move towards target
+			local currentPos = floaterPos
+			local direction = (pullMoveTarget - currentPos)
+			local horizontalDir = Vector3.new(direction.X, 0, direction.Z)
+			
+			if horizontalDir.Magnitude < 1 then
+				-- Reached target, pick new random target
+				pullMoveTarget = data.PullStartPos + Vector3.new(
+					math.random(-Config.PullMoveRange, Config.PullMoveRange),
+					0,
+					math.random(-Config.PullMoveRange, Config.PullMoveRange)
+				)
+			end
+			
+			-- Move floater
+			local moveStep = horizontalDir.Unit * Config.PullMoveSpeed * dt
+			if horizontalDir.Magnitude < moveStep.Magnitude then
+				moveStep = horizontalDir
+			end
+			
+			-- Vertical bobbing (fish pulling down)
+			local verticalOffset = -math.abs(math.sin(pullTime * Config.PullVerticalSpeed)) * Config.PullVerticalDepth
+			
+			local baseY = data.PullStartPos and data.PullStartPos.Y or floaterPos.Y
+			local newPos = Vector3.new(
+				currentPos.X + moveStep.X,
+				baseY + verticalOffset,
+				currentPos.Z + moveStep.Z
+			)
+			
+			if data.Floater then
+				if data.Floater:IsA("Model") and data.Floater.PrimaryPart then
+					data.Floater:SetPrimaryPartCFrame(CFrame.new(newPos))
+				else
+					data.Floater.CFrame = CFrame.new(newPos)
+				end
+			end
+			
+			floaterPos = newPos
+		
 		-- === BOBBING PHASE ===
-		elseif data.IsFloating and not data.IsPulling and data.FloaterBasePos then
+		elseif data.IsFloating and data.FloaterBasePos then
 			local bobOffset = math.sin(bobTime * Config.BobSpeed) * Config.BobHeight
 			local newPos = data.FloaterBasePos + Vector3.new(0, bobOffset, 0)
 			
@@ -472,7 +563,16 @@ local function startAnimation(player)
 		local startPos = rodTip
 		local endPos = floaterPos
 		local totalDist = (endPos - startPos).Magnitude
-		local sag = math.clamp(totalDist * 0.25, 2, 15)
+		
+		-- FIX #1: Line tension based on state
+		local sag
+		if data.IsPulling then
+			-- TENSE LINE when pulling (minimal sag)
+			sag = math.clamp(totalDist * 0.05, 0.3, 2)
+		else
+			-- Normal sag
+			sag = math.clamp(totalDist * 0.25, 2, 15)
+		end
 		
 		local ropeDir = (endPos - startPos).Unit
 		local windDir = ropeDir:Cross(Vector3.new(0, 1, 0))
@@ -482,8 +582,9 @@ local function startAnimation(player)
 			windDir = Vector3.new(1, 0, 0)
 		end
 		
-		-- Update surface cache every 15 frames
-		if frameCount % 15 == 0 then
+		-- Update surface cache (less often when pulling)
+		local surfaceUpdateInterval = data.IsPulling and 30 or 15
+		if frameCount % surfaceUpdateInterval == 0 and not data.IsPulling then
 			data.SurfaceCache = {}
 			for i = 1, Config.NumLineSegments do
 				local alpha = i / (Config.NumLineSegments + 1)
@@ -494,26 +595,23 @@ local function startAnimation(player)
 			end
 		end
 		
-		-- Animate within distance
 		local useAnimation = distance <= Config.AnimatedDistance
 		
 		for i, segment in ipairs(data.LineSegments) do
 			if segment.Part then
 				local alpha = i / (Config.NumLineSegments + 1)
 				
-				-- Base position
 				local midX = startPos.X + (endPos.X - startPos.X) * alpha
 				local midZ = startPos.Z + (endPos.Z - startPos.Z) * alpha
 				local baseY = startPos.Y + (endPos.Y - startPos.Y) * alpha
 				
-				-- Gravity sag
 				local parabolaFactor = -4 * (alpha - 0.5) * (alpha - 0.5) + 1
 				local yOffset = sag * parabolaFactor
 				
 				local finalPos
 				
-				if useAnimation then
-					-- Wind sway (stronger for visibility)
+				if useAnimation and not data.IsPulling then
+					-- Wind animation (only when NOT pulling)
 					local swayStrength = math.sin(alpha * math.pi) * WindSettings.SwayStrength
 					local combinedWave = 0
 					combinedWave = combinedWave + math.sin(windTime * WindSettings.WindSpeed1 + alpha * 3)
@@ -527,17 +625,22 @@ local function startAnimation(player)
 					local downwardWave = math.abs(math.sin(windTime * 0.8 + alpha * 2)) * 0.15
 					
 					finalPos = Vector3.new(midX, baseY - yOffset - downwardWave, midZ) + windOffset
+				elseif data.IsPulling then
+					-- Tense line (minimal sag, slight vibration)
+					local vibration = math.sin(pullTime * 20 + alpha * 10) * 0.05
+					finalPos = Vector3.new(midX, baseY - yOffset + vibration, midZ)
 				else
-					-- Static line
 					finalPos = Vector3.new(midX, baseY - yOffset, midZ)
 				end
 				
-				-- Surface clamping
-				local surfaceY = data.SurfaceCache[i]
-				if surfaceY then
-					local minY = surfaceY - 0.05
-					if finalPos.Y < minY then
-						finalPos = Vector3.new(finalPos.X, minY, finalPos.Z)
+				-- Surface clamping (only when NOT pulling)
+				if not data.IsPulling then
+					local surfaceY = data.SurfaceCache[i]
+					if surfaceY then
+						local minY = surfaceY - 0.05
+						if finalPos.Y < minY then
+							finalPos = Vector3.new(finalPos.X, minY, finalPos.Z)
+						end
 					end
 				end
 				
@@ -566,7 +669,6 @@ if PlayerThrewFloaterEvent then
 		
 		local data = getPlayerData(player)
 		
-		-- Set throw state
 		data.IsThrowing = true
 		data.IsFloating = false
 		data.IsPulling = false
@@ -575,14 +677,10 @@ if PlayerThrewFloaterEvent then
 		data.ThrowHeight = eventData.ThrowHeight or 8
 		data.ThrowStartTime = tick()
 		data.FloaterBasePos = eventData.TargetPos
+		data.PullStartPos = nil
 		
-		-- Create floater at START position
 		createFloater(player, eventData.FloaterId, eventData.StartPos)
-		
-		-- Create fishing line IMMEDIATELY
 		createFishingLine(player, eventData.LineStyle)
-		
-		-- Start animation (handles throw arc, then bobbing)
 		startAnimation(player)
 	end)
 end
@@ -594,6 +692,7 @@ if PlayerStartedPullingEvent then
 		if data then
 			data.IsPulling = true
 			data.IsFloating = false
+			data.PullStartPos = data.FloaterBasePos
 		end
 	end)
 end
@@ -633,11 +732,10 @@ _G.FishingReplication = {
 		end
 	end,
 	
-	-- No-ops (animation runs locally)
 	NotifyUpdateFloaterPos = function() end,
 	NotifyUpdateLineSegments = function() end,
 }
 
 Players.PlayerRemoving:Connect(cleanupPlayerFishing)
 
-print("✅ [FISHING REPLICATION CLIENT] Loaded (v2 - with throw arc & wind)")
+print("✅ [FISHING REPLICATION CLIENT] Loaded (v3 - fixed pulling & surface)")

@@ -116,7 +116,7 @@ local queuePanel = screenGui:WaitForChild("QueuePanel")
 local queueListPanel = queuePanel:WaitForChild("QueueListPanel")
 local queueScroll = queueListPanel:WaitForChild("Queue")
 
-print("✅ [MUSIC PLAYER] All UI references loaded")
+
 
 -- ==================== USE HUD BUTTON TEMPLATE (RIGHT SIDE) ====================
 
@@ -155,7 +155,7 @@ if buttonTemplate then
 		buttonText.Text = "Music"
 	end
 	
-	print("✅ [MUSIC] Using HUD template button (Right)")
+
 else
 	-- Fallback: Create button manually if template not found
 	warn("[MUSIC] HUD template not found, creating button manually")
@@ -211,7 +211,6 @@ local widgetCloseButton = widgetPanel:FindFirstChild("CloseButton")
 if widgetCloseButton then
 	widgetCloseButton.MouseButton1Click:Connect(function()
 		widgetPanel.Visible = false
-		print("🎵 [MUSIC] Widget hidden - open music menu to show again")
 	end)
 end
 
@@ -225,7 +224,6 @@ local function closeMusicPlayer()
 	queuePanel.Visible = false
 	widgetPanel.Visible = true
 	isMusicPanelOpen = false
-	print("🎵 [MUSIC] Music player closed")
 end
 
 -- Function to show main panel (from sub-panels)
@@ -234,7 +232,6 @@ local function showMainPanel()
 	myLibraryPanel.Visible = false
 	playlistPopupPanel.Visible = false
 	queuePanel.Visible = false
-	print("🎵 [MUSIC] Returned to main panel")
 end
 
 -- Function to show library panel
@@ -243,7 +240,6 @@ local function showLibraryPanel()
 	myLibraryPanel.Visible = true
 	playlistPopupPanel.Visible = false
 	queuePanel.Visible = false
-	print("🎵 [MUSIC] Showing library panel")
 end
 
 -- ==================== MAIN PANEL - Close Button ====================
@@ -254,7 +250,6 @@ if mainHeader then
 		mainCloseButton.MouseButton1Click:Connect(function()
 			closeMusicPlayer()
 		end)
-		print("✅ [MUSIC] MainPanel CloseButton connected")
 	end
 end
 
@@ -266,7 +261,6 @@ if libraryHeader then
 		libraryBackButton.MouseButton1Click:Connect(function()
 			showMainPanel()
 		end)
-		print("✅ [MUSIC] MyLibraryPanel BackButton connected")
 	end
 	
 	local libraryCloseButton = libraryHeader:FindFirstChild("CloseButton")
@@ -274,7 +268,6 @@ if libraryHeader then
 		libraryCloseButton.MouseButton1Click:Connect(function()
 			closeMusicPlayer()
 		end)
-		print("✅ [MUSIC] MyLibraryPanel CloseButton connected")
 	end
 end
 
@@ -286,9 +279,7 @@ if popupHeaderRef then
 		popupBack.MouseButton1Click:Connect(function()
 			playlistPopupPanel.Visible = false
 			myLibraryPanel.Visible = true
-			print("🎵 [MUSIC] Returned to library from playlist popup")
 		end)
-		print("✅ [MUSIC] PlaylistPopupPanel BackButton connected")
 	end
 	
 	local popupClose = popupHeaderRef:FindFirstChild("CloseButton")
@@ -296,7 +287,6 @@ if popupHeaderRef then
 		popupClose.MouseButton1Click:Connect(function()
 			closeMusicPlayer()
 		end)
-		print("✅ [MUSIC] PlaylistPopupPanel CloseButton connected")
 	end
 end
 
@@ -308,9 +298,7 @@ if queueHeader then
 		queueBackButton.MouseButton1Click:Connect(function()
 			queuePanel.Visible = false
 			mainPanel.Visible = true
-			print("🎵 [MUSIC] Returned to main from queue")
 		end)
-		print("✅ [MUSIC] QueuePanel BackButton connected")
 	end
 	
 	local queueCloseButton = queueHeader:FindFirstChild("CloseButton")
@@ -318,7 +306,6 @@ if queueHeader then
 		queueCloseButton.MouseButton1Click:Connect(function()
 			closeMusicPlayer()
 		end)
-		print("✅ [MUSIC] QueuePanel CloseButton connected")
 	end
 end
 
@@ -383,8 +370,6 @@ local function loadPlaylists()
 	end
 
 	task.wait(1)
-	print(string.format("✅ Loaded %d playlists with %d total songs", 
-		#playlists, #allSongs))
 end
 
 loadFavorites = function()
@@ -415,7 +400,7 @@ loadFavorites = function()
 				end
 			end
 
-			print(string.format("🎵 [MUSIC CLIENT] Loaded %d favorite songs", #favorites))
+
 
 			if myLibraryPanel.Visible then
 				updateLibraryContent()

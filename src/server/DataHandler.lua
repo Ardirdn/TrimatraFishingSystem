@@ -147,7 +147,7 @@ function DataHandler:LoadPlayer(player)
 		return false
 	end
 
-	print(string.format("📂 [DATA HANDLER] Loading data for %s...", player.Name))
+
 
 	-- Try to load data with retry
 	local data = nil
@@ -185,7 +185,7 @@ function DataHandler:LoadPlayer(player)
 	moneyValue.Value = data.Money
 	moneyValue.Parent = player
 
-	print(string.format("✅ [DATA HANDLER] Loaded data for %s (Money: $%d, Title: %s)", player.Name, data.Money, data.Title))
+
 
 	return true
 end
@@ -203,7 +203,7 @@ function DataHandler:SavePlayer(player)
 	local key = "Player_" .. userId
 	local data = PlayerDataCache[player]
 
-	print(string.format("💾 [DATA HANDLER] Saving data for %s...", player.Name))
+
 
 	-- Try to save with retry
 	local success = false
@@ -225,7 +225,7 @@ function DataHandler:SavePlayer(player)
 	end
 
 	if success then
-		print(string.format("✅ [DATA HANDLER] Saved data for %s", player.Name))
+
 		return true
 	else
 		warn(string.format("❌ [DATA HANDLER] Failed to save data for %s after %d attempts", player.Name, CONFIG.MaxRetries))
@@ -384,7 +384,7 @@ function DataHandler:CleanupPlayer(player)
 	PlayerDataCache[player] = nil
 	SessionLocks[userId] = nil
 
-	print(string.format("🧹 [DATA HANDLER] Cleaned up data for %s", player.Name))
+
 end
 
 -- Auto-save loop
@@ -401,22 +401,16 @@ task.spawn(function()
 				count = count + 1
 			end
 		end
-
-		print(string.format("✅ [DATA HANDLER] Auto-saved %d players", count))
 	end
 end)
 
 -- Save on server shutdown
 game:BindToClose(function()
-	print("🛑 [DATA HANDLER] Server shutting down, saving all data...")
-
 	for player, _ in pairs(PlayerDataCache) do
 		if player and player.Parent then
 			DataHandler:SavePlayer(player)
 		end
 	end
-
-	print("✅ [DATA HANDLER] All data saved on shutdown")
 
 	-- Wait a bit to ensure saves complete
 	if RunService:IsStudio() then

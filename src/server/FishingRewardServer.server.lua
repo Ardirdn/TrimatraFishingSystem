@@ -33,14 +33,14 @@ if not GetFishInventoryFunc then
 	GetFishInventoryFunc.Parent = ReplicatedStorage
 end
 
-print("✅ [FISHING REWARD SERVER] Initialized")
+
 
 -- ============================================
 -- FISH TOOL CREATION
 -- ============================================
 
 local function createFishTool(player, fishId, fishData)
-	print("🎣 [TOOL] Creating fish tool for:", fishData.Name)
+
 	
 	-- Create Tool
 	local fishTool = Instance.new("Tool")
@@ -61,7 +61,6 @@ local function createFishTool(player, fishId, fishData)
 	if FishModelsFolder then
 		local fishModel = FishModelsFolder:FindFirstChild(fishId)
 		if fishModel then
-			print("✅ [TOOL] Found 3D model, preparing for tool...")
 			
 			if fishModel:IsA("Model") then
 				local primaryPart = fishModel.PrimaryPart or fishModel:FindFirstChildWhichIsA("BasePart")
@@ -128,7 +127,6 @@ local function createFishTool(player, fishId, fishData)
 	
 	-- Fallback: create placeholder
 	if not handle then
-		print("⚠️ [TOOL] No model found, creating placeholder...")
 		handle = Instance.new("Part")
 		handle.Name = "Handle"
 		handle.Shape = Enum.PartType.Block
@@ -176,7 +174,7 @@ local function createFishTool(player, fishId, fishData)
 	local backpack = player:WaitForChild("Backpack")
 	fishTool.Parent = backpack
 	
-	print("✅ [TOOL] Fish tool added to", player.Name, "'s backpack:", fishData.Name)
+
 	return fishTool
 end
 
@@ -185,7 +183,7 @@ end
 -- ============================================
 
 local function giveFishReward(player, success)
-	print("🔍 [DEBUG] giveFishReward called for", player.Name, "| Success:", success)
+
 
 	local data = DataHandler:GetData(player)
 	if not data then 
@@ -194,12 +192,10 @@ local function giveFishReward(player, success)
 	end
 
 	if not success then
-		print("❌", player.Name, "failed to catch fish")
 		return
 	end
 
 	-- Get random fish
-	print("🎲 [DEBUG] Getting random fish...")
 	local fishId, fishData = FishConfig.GetRandomFish()
 
 	if not fishId or not fishData then
@@ -207,7 +203,7 @@ local function giveFishReward(player, success)
 		return
 	end
 
-	print("🐟 [DEBUG] Fish selected:", fishId, "-", fishData.Name)
+
 
 	-- ═══════════════════════════════════════
 	-- UPDATE DATA VIA DATAHANDLER
@@ -243,9 +239,7 @@ local function giveFishReward(player, success)
 	-- Get current fish count for this type
 	local fishCount = fishInventory[fishId]
 
-	print("🎣", player.Name, "caught", fishData.Name, "(", fishData.Rarity, ")", 
-		"Count:", fishCount,
-		isNewDiscovery and "- NEW DISCOVERY!" or "")
+
 
 	-- Notify client (no money given, fish goes to inventory)
 	FishCaughtEvent:FireClient(player, {
@@ -257,7 +251,7 @@ local function giveFishReward(player, success)
 		Price = fishData.Price or 0 -- For display purposes only
 	})
 	
-	print("✅ [DEBUG] Fish added to inventory!")
+
 end
 
 -- ============================================
@@ -266,7 +260,7 @@ end
 
 -- Client calls this when fishing success/fail
 FishingSuccessEvent.OnServerEvent:Connect(function(player, success)
-	print("📞 [DEBUG] FishingSuccessEvent received from", player.Name, "| Success:", success)
+
 	giveFishReward(player, success)
 end)
 
@@ -283,4 +277,4 @@ GetFishInventoryFunc.OnServerInvoke = function(player)
 	return nil
 end
 
-print("✅ [FISHING REWARD SERVER] System loaded (using DataHandler)")
+

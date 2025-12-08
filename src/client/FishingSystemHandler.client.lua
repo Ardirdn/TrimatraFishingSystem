@@ -109,7 +109,6 @@ local function fetchEquippedFloater()
 	
 	if success and data then
 		equippedFloaterId = data.EquippedFloater
-		print("🎈 [FISHING] Equipped floater loaded:", equippedFloaterId or "None")
 	end
 end
 
@@ -210,7 +209,7 @@ local function updateLineStyle()
 		LineStyle.Transparency = rodStyle.Transparency or 0.12
 		LineStyle.LightEmission = rodStyle.LightEmission or 10
 		LineStyle.LightInfluence = rodStyle.IsNeon and 0 or 1
-		print("🎨 [FISHING] LineStyle updated:", LineStyle.Color)
+
 	else
 		-- Use default
 		LineStyle = {
@@ -239,9 +238,7 @@ local timerCounter = timerBar:WaitForChild("TimerCounter")
 local tapTapLabel = pullFrame:WaitForChild("TapTapLabel")
 
 
-print("FishingPanel:", fishingPanel)
-print("PullFrame:", pullFrame)
-print("FillBar:", fillBar)
+
 assert(fillBar, "ERROR: Fillbar not found! Periksa struktur dan penamaan GUI")
 
 
@@ -694,7 +691,7 @@ local function cleanupBaitLine()
 end
 
 local function cleanupFishing()
-	print("CLEANUP: cleanupFishing() dipanggil pada", tick())
+
 
 	-- ✅ Stop throw camera look-at if active
 	stopThrowCameraLookAt()
@@ -754,14 +751,7 @@ local function cleanupFishing()
 		end
 	end
 
-	-- ###### Debug print ######
-	local floaterCount = 0
-	for _, obj in ipairs(workspace:GetChildren()) do
-		if obj:IsA("Model") and obj.Name == "Floater" then
-			floaterCount = floaterCount + 1
-		end
-	end
-	print("DEBUG: Floating bobber 'Floater' tersisa di workspace:", floaterCount)
+
 	
 	-- ✅ REPLICATION: Notify server that fishing stopped
 	notifyReplication("NotifyStopFishing")
@@ -1936,7 +1926,7 @@ local function createAfkButton()
 			label.Text = "AFK"
 		end
 		
-		print("✅ [FISHING] AFK Button using HUD template (Left)")
+
 	else
 		-- Fallback: Create button manually if template not found
 		warn("[FISHING] HUD template not found, creating AFK button manually")
@@ -1999,17 +1989,13 @@ local function createAfkButton()
 		end)
 	end
 	
-	print("✅ [FISHING] AFK Button created")
+
 end
 
 -- Create AFK button after setup
 task.delay(2, createAfkButton)
 
 local function onMouseClick()
-	print(string.format(
-		"isRecovering: %s, isRetrieving: %s, isThrowing: %s, isFishing: %s, isFloating: %s, isPulling: %s",
-		tostring(isRecovering), tostring(isRetrieving), tostring(isThrowing), tostring(isFishing), tostring(isFloating), tostring(isPulling)
-		))
 
 	-- ✅ NEW: Block throwing if any UI is open
 	if isAnyUIOpen then
@@ -2060,7 +2046,7 @@ local function onMouseClick()
 
 	if not currentTool or not currentConfig then return end
 
-	print("🎣 Melempar umpan...")
+
 	throwFloater()
 end
 
@@ -2110,13 +2096,12 @@ local function onToolEquipped(tool)
 	-- ✅ REPLICATION: Notify server that we started fishing
 	notifyReplication("NotifyStartFishing", tool.Name, equippedFloaterId)
 
-	print("✅ Equipped:", tool.Name, "- Klik layar untuk fishing!")
+
 end
 
 
 
 local function onToolUnequipped()
-	print("🔄 [FISHING] Tool unequipped, canceling all states...")
 	
 	-- ✅ FIX: Force cancel pulling immediately
 	if isPulling then
@@ -2429,7 +2414,7 @@ local function closeAllUIsOnFishCaught()
 		end
 	end
 	
-	print("🐟 [FISHING] Closed", closedCount, "UI panels")
+
 end
 
 -- Expose globally so pulling success can call it
@@ -2438,41 +2423,28 @@ _G.closeAllUIsOnFishCaught = closeAllUIsOnFishCaught
 -- ==================== FISH CAUGHT EVENT LISTENER ====================
 local FishCaughtEvent = ReplicatedStorage:FindFirstChild("FishCaughtEvent")
 
-print("🔍 [DEBUG] Looking for FishCaughtEvent...")
 if FishCaughtEvent then
-	print("✅ [DEBUG] FishCaughtEvent FOUND!")
 	FishCaughtEvent.OnClientEvent:Connect(function(data)
-		print("🐟 [FISHING] FishCaughtEvent RECEIVED!")
-		
 		if data and data.IsNewDiscovery then
 			isNewFishUIVisible = true
 			lastNewFishTime = tick()
-			print("  🆕 [DEBUG] New fish discovery flag set")
 		end
-		
-		-- Auto close all UIs
 		closeAllUIsOnFishCaught()
 	end)
 else
-	print("⚠️ [DEBUG] FishCaughtEvent NOT FOUND in ReplicatedStorage!")
 	
-	-- Try WaitForChild with timeout
 	task.spawn(function()
 		local event = ReplicatedStorage:WaitForChild("FishCaughtEvent", 10)
 		if event then
-			print("✅ [DEBUG] FishCaughtEvent found after wait!")
 			event.OnClientEvent:Connect(function(data)
-				print("🐟 [FISHING] FishCaughtEvent RECEIVED (delayed)!")
-				
 				if data and data.IsNewDiscovery then
 					isNewFishUIVisible = true
 					lastNewFishTime = tick()
 				end
-				
 				closeAllUIsOnFishCaught()
 			end)
 		else
-			print("❌ [DEBUG] FishCaughtEvent still not found after 10s wait!")
+			warn("[FISHING] FishCaughtEvent not found after 10s!")
 		end
 	end)
 end

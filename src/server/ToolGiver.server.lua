@@ -55,7 +55,6 @@ local function createFishTool(player, fishId, fishData)
 	if FishModelsFolder then
 		local fishModel = FishModelsFolder:FindFirstChild(fishId)
 		if fishModel then
-			print("✅ [TOOL GIVER] Found 3D model for:", fishId)
 			if fishModel:IsA("Model") then
 				local primaryPart = fishModel.PrimaryPart or fishModel:FindFirstChildWhichIsA("BasePart")
 				
@@ -195,9 +194,7 @@ local function giveFishTools(player, backpack)
 		end
 	end
 	
-	if fishCount > 0 then
-		print("🐟 [TOOL GIVER] Gave", fishCount, "fish tools to", player.Name)
-	end
+
 end
 
 -- ============================================
@@ -254,7 +251,7 @@ local function giveEquippedRod(player)
 			end
 		end)
 		
-		print("🎣 [TOOL GIVER] Gave & auto-equipped rod to", player.Name, ":", equippedRodId)
+
 	else
 		warn("⚠️ [TOOL GIVER] Equipped rod not found:", equippedRodId)
 	end
@@ -283,5 +280,5 @@ for _, player in ipairs(Players:GetPlayers()) do
 	end
 end
 
-print("✅ [TOOL GIVER] Script Loaded - Auto-equips saved rod + fish tools on spawn!")
+
 

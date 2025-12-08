@@ -292,6 +292,7 @@ local previousMinZoom, previousMaxZoom = nil, nil
 local throwCamActive = false
 local throwCamConn = nil
 local throwCamTargetPos = nil
+local throwCamSavedCFrame = nil  -- CFrame kamera LENGKAP sebelum throw (untuk restore)
 local throwCamSavedPosition = nil  -- Posisi kamera yang di-lock saat throw
 
 function startThrowCameraLookAt(targetPos)
@@ -299,7 +300,8 @@ function startThrowCameraLookAt(targetPos)
 	throwCamActive = true
 	throwCamTargetPos = targetPos
 	
-	-- ✅ SAVE current camera position - this will be LOCKED
+	-- ✅ SAVE current camera CFrame (FULL) - for restoring later
+	throwCamSavedCFrame = camera.CFrame
 	throwCamSavedPosition = camera.CFrame.Position
 	
 	print("📷 [CAMERA] Starting throw look-at (locked position)")
@@ -337,18 +339,58 @@ function stopThrowCameraLookAt()
 	if not throwCamActive then return end
 	throwCamActive = false
 	throwCamTargetPos = nil
-	throwCamSavedPosition = nil
 	
-	print("📷 [CAMERA] Stopping throw look-at effect")
+	print("📷 [CAMERA] Stopping throw look-at effect (smooth transition)")
 	
 	if throwCamConn then
 		throwCamConn:Disconnect()
 		throwCamConn = nil
 	end
 	
-	-- Restore to Custom mode so player can control camera again
-	camera.CameraType = Enum.CameraType.Custom
-	camera.CameraSubject = Character and Character:FindFirstChild("Humanoid") or nil
+	-- ✅ SMOOTH TRANSITION: Lerp camera back to ORIGINAL position (before throw)
+	local humanoid = Character and Character:FindFirstChild("Humanoid")
+	local savedCFrame = throwCamSavedCFrame
+	
+	if savedCFrame then
+		-- Start smooth transition using RenderStepped
+		local transitionStartTime = tick()
+		local transitionDuration = 0.5 -- Duration in seconds
+		local startCFrame = camera.CFrame
+		
+		local transitionConn
+		transitionConn = RunService.RenderStepped:Connect(function()
+			local elapsed = tick() - transitionStartTime
+			local alpha = math.min(elapsed / transitionDuration, 1)
+			
+			-- Use smooth easing (EaseOutQuad)
+			local easedAlpha = 1 - (1 - alpha) * (1 - alpha)
+			
+			-- Lerp from current position back to saved original CFrame
+			camera.CFrame = startCFrame:Lerp(savedCFrame, easedAlpha)
+			
+			-- Transition complete
+			if alpha >= 1 then
+				transitionConn:Disconnect()
+				transitionConn = nil
+				
+				-- Ensure final CFrame matches saved exactly
+				camera.CFrame = savedCFrame
+				
+				-- Now switch to Custom mode for player control
+				camera.CameraType = Enum.CameraType.Custom
+				camera.CameraSubject = humanoid
+				
+				print("📷 [CAMERA] Smooth transition complete, restored to original position")
+			end
+		end)
+	else
+		-- Fallback: No saved CFrame, just restore immediately
+		camera.CameraType = Enum.CameraType.Custom
+		camera.CameraSubject = humanoid
+	end
+	
+	throwCamSavedCFrame = nil
+	throwCamSavedPosition = nil
 end
 
 function startPullCamera(offsetDistance, offsetSide)

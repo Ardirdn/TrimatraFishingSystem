@@ -35,7 +35,7 @@ local COLORS = {
 }
 
 -- Distance culling constants
-local MAX_VISIBLE_DISTANCE = 30 -- studs
+local MAX_VISIBLE_DISTANCE = 20 -- studs
 
 -- Create Title Billboard (REDESIGNED v2)
 local function createTitleBillboard(character)
@@ -53,7 +53,7 @@ local function createTitleBillboard(character)
 
 	local billboard = Instance.new("BillboardGui")
 	billboard.Name = "TitleBillboard"
-	billboard.Size = UDim2.new(0, 300, 0, 70)
+	billboard.Size = UDim2.new(0, 250, 0, 60)
 	billboard.StudsOffset = Vector3.new(0, 3, 0)
 	billboard.AlwaysOnTop = true
 	billboard.MaxDistance = MAX_VISIBLE_DISTANCE

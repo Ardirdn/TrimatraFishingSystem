@@ -105,6 +105,31 @@ local LineStyle = {
 	FaceCamera = true
 }
 
+-- ============================================
+-- REPLICATION HELPERS (SIMPLIFIED)
+-- Server only receives STATE changes, not position updates
+-- All animation runs locally on each client
+-- ============================================
+local function notifyReplication(method, ...)
+	local args = {...}
+	task.spawn(function()
+		if _G.FishingReplication and _G.FishingReplication[method] then
+			pcall(function()
+				_G.FishingReplication[method](table.unpack(args))
+			end)
+		end
+	end)
+end
+
+-- These are now no-ops since animation runs locally
+local function notifyFloaterPosition(floaterPos, edgePos)
+	-- No longer needed - animation runs locally on each client
+end
+
+local function notifyLineSegments(segments)
+	-- No longer needed - animation runs locally on each client
+end
+
 -- Function to update LineStyle from current rod config
 local function updateLineStyle()
 	if currentConfig and currentConfig.LineStyle then
@@ -728,6 +753,9 @@ local function cleanupFishing()
 		end
 	end
 	print("DEBUG: Floating bobber 'Floater' tersisa di workspace:", floaterCount)
+	
+	-- ✅ REPLICATION: Notify server that fishing stopped
+	notifyReplication("NotifyStopFishing")
 end
 
 
@@ -1168,6 +1196,9 @@ local function startPulling()
 		pullingAnimation:Play()
 		print("🎣 Playing pulling animation (loop)")
 	end
+
+	-- ✅ REPLICATION: Notify server that pulling started
+	notifyReplication("NotifyStartPulling")
 
 	-- Tampilkan UI PullFrame dan jalankan tapTap pulling
 	pullFrame.Visible = true
@@ -1795,6 +1826,9 @@ local function throwFloater()
 	end
 
 	createFishingLine()
+	
+	-- ✅ REPLICATION: Notify server IMMEDIATELY when throw starts (before animation)
+	notifyReplication("NotifyThrowFloater", startPos, targetPos, currentTool and currentTool.Name, floaterToUse, LineStyle, currentConfig.ThrowHeight)
 
 	-- ANIMASI THROW: lakukan force cleanup orphan bobber SETELAH semua transition selesai
 	local throwDuration = 1.5
@@ -2042,6 +2076,9 @@ local function onToolEquipped(tool)
 	if idleAnimation then
 		idleAnimation:Play()
 	end
+
+	-- ✅ REPLICATION: Notify server that we started fishing
+	notifyReplication("NotifyStartFishing", tool.Name, equippedFloaterId)
 
 	print("✅ Equipped:", tool.Name, "- Klik layar untuk fishing!")
 end

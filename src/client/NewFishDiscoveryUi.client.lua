@@ -136,7 +136,7 @@ local function showNewDiscoveryBanner(fishID, fishData, quantity)
 
 	-- 3. Main Card Container (ADAPTIVE with Scale)
 	local card = Instance.new("Frame")
-	card.Size = UDim2.new(0.85, 0, 0.5, 0) -- 85% width, 50% height (scale-based)
+	card.Size = UDim2.new(0.55, 0, 0.38, 0) -- COMPACT: 55% width, 38% height
 	card.Position = UDim2.new(0.5, 0, 0.5, 0)
 	card.AnchorPoint = Vector2.new(0.5, 0.5)
 	card.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
@@ -146,28 +146,28 @@ local function showNewDiscoveryBanner(fishID, fishData, quantity)
 	card.Parent = bannerGui
 	card.Visible = false
 
-	-- ═══ ADAPTIVE CONSTRAINTS ═══
-	-- Aspect Ratio Constraint (2:1 ratio - width 2x height)
+	-- ═══ ADAPTIVE CONSTRAINTS (COMPACT) ═══
+	-- Aspect Ratio Constraint (1.8:1 ratio - more compact)
 	local aspectRatio = Instance.new("UIAspectRatioConstraint")
-	aspectRatio.AspectRatio = 2 -- 2:1 (width:height)
+	aspectRatio.AspectRatio = 1.8 -- 1.8:1 (more compact than before)
 	aspectRatio.AspectType = Enum.AspectType.ScaleWithParentSize
 	aspectRatio.DominantAxis = Enum.DominantAxis.Width
 	aspectRatio.Parent = card
 
-	-- Size Constraint (Min & Max bounds)
+	-- Size Constraint (Smaller Min & Max bounds)
 	local sizeConstraint = Instance.new("UISizeConstraint")
-	sizeConstraint.MinSize = Vector2.new(450, 225) -- Minimum size
-	sizeConstraint.MaxSize = Vector2.new(1000, 500) -- Maximum size
+	sizeConstraint.MinSize = Vector2.new(380, 210) -- Smaller minimum size
+	sizeConstraint.MaxSize = Vector2.new(650, 360) -- Smaller maximum size
 	sizeConstraint.Parent = card
 
 	local cardCorner = Instance.new("UICorner")
-	cardCorner.CornerRadius = UDim.new(0, 24)
+	cardCorner.CornerRadius = UDim.new(0, 16) -- Smaller corner radius for compact look
 	cardCorner.Parent = card
 
 	-- Card Stroke/Glow
 	local cardStroke = Instance.new("UIStroke")
 	cardStroke.Color = rarityColor
-	cardStroke.Thickness = 3
+	cardStroke.Thickness = 2 -- Thinner stroke for compact
 	cardStroke.Transparency = 0.2
 	cardStroke.Parent = card
 
@@ -184,14 +184,14 @@ local function showNewDiscoveryBanner(fishID, fishData, quantity)
 	-- LEFT SIDE: VISUALS (Rays + 3D Model)
 	-- ==========================================
 	local visualContainer = Instance.new("Frame")
-	visualContainer.Size = UDim2.new(0.45, 0, 1, 0)
+	visualContainer.Size = UDim2.new(0.48, 0, 1, 0) -- Slightly larger for better fish visibility
 	visualContainer.BackgroundTransparency = 1
 	visualContainer.Parent = card
 
 	-- Rotating Rays Effect (Manual creation using frames since no asset ID)
 	local raysContainer = Instance.new("Frame")
 	raysContainer.Name = "RaysContainer"
-	raysContainer.Size = UDim2.new(0, 400, 0, 400)
+	raysContainer.Size = UDim2.new(0, 280, 0, 280) -- Smaller rays for compact UI
 	raysContainer.AnchorPoint = Vector2.new(0.5, 0.5)
 	raysContainer.Position = UDim2.new(0.5, 0, 0.5, 0)
 	raysContainer.BackgroundTransparency = 1
@@ -227,8 +227,8 @@ local function showNewDiscoveryBanner(fishID, fishData, quantity)
 
 	-- 3D Model Viewport (The Star of the Show)
 	local viewport = Instance.new("ViewportFrame")
-	viewport.Size = UDim2.new(1.2, 0, 1.2, 0) -- Slightly larger than container
-	viewport.Position = UDim2.new(0, -30, -0.1, 0) -- Shift slightly left and up
+	viewport.Size = UDim2.new(1.3, 0, 1.3, 0) -- Larger viewport for prominent fish display
+	viewport.Position = UDim2.new(0, -15, -0.15, 0) -- Centered better
 	viewport.BackgroundTransparency = 1
 	viewport.Ambient = Color3.fromRGB(200, 200, 200)
 	viewport.LightColor = Color3.fromRGB(255, 255, 255)
@@ -239,34 +239,34 @@ local function showNewDiscoveryBanner(fishID, fishData, quantity)
 	-- RIGHT SIDE: INFO & DETAILS
 	-- ==========================================
 	local infoContainer = Instance.new("Frame")
-	infoContainer.Size = UDim2.new(0.55, 0, 1, 0)
-	infoContainer.Position = UDim2.new(0.45, 0, 0, 0)
+	infoContainer.Size = UDim2.new(0.52, 0, 1, 0) -- Adjusted for new layout
+	infoContainer.Position = UDim2.new(0.48, 0, 0, 0)
 	infoContainer.BackgroundTransparency = 1
 	infoContainer.Parent = card
 
 	local infoPadding = Instance.new("UIPadding")
-	infoPadding.PaddingTop = UDim.new(0, 30)
-	infoPadding.PaddingBottom = UDim.new(0, 30)
-	infoPadding.PaddingRight = UDim.new(0, 30)
-	infoPadding.PaddingLeft = UDim.new(0, 10)
+	infoPadding.PaddingTop = UDim.new(0, 18) -- Reduced padding for compact
+	infoPadding.PaddingBottom = UDim.new(0, 18)
+	infoPadding.PaddingRight = UDim.new(0, 20)
+	infoPadding.PaddingLeft = UDim.new(0, 8)
 	infoPadding.Parent = infoContainer
 
 	-- List Layout
 	local listLayout = Instance.new("UIListLayout")
 	listLayout.FillDirection = Enum.FillDirection.Vertical
 	listLayout.SortOrder = Enum.SortOrder.LayoutOrder
-	listLayout.Padding = UDim.new(0, 10)
+	listLayout.Padding = UDim.new(0, 6) -- Tighter spacing for compact
 	listLayout.VerticalAlignment = Enum.VerticalAlignment.Center
 	listLayout.Parent = infoContainer
 
 	-- 1. "NEW DISCOVERY" Header
 	local headerLabel = Instance.new("TextLabel")
 	headerLabel.Text = "✨ NEW DISCOVERY ✨"
-	headerLabel.Size = UDim2.new(1, 0, 0, 30)
+	headerLabel.Size = UDim2.new(1, 0, 0, 20) -- Smaller header
 	headerLabel.BackgroundTransparency = 1
 	headerLabel.Font = Enum.Font.GothamBlack
-	headerLabel.TextSize = 16
-	headerLabel.TextColor3 = Color3.fromRGB(255, 255, 150) -- Gold-ish text
+	headerLabel.TextSize = 12 -- Smaller text
+	headerLabel.TextColor3 = Color3.fromRGB(255, 255, 150)
 	headerLabel.TextXAlignment = Enum.TextXAlignment.Left
 	headerLabel.LayoutOrder = 1
 	headerLabel.Parent = infoContainer
@@ -274,10 +274,10 @@ local function showNewDiscoveryBanner(fishID, fishData, quantity)
 	-- 2. Fish Name (Huge)
 	local nameLabel = Instance.new("TextLabel")
 	nameLabel.Text = fishData.Name
-	nameLabel.Size = UDim2.new(1, 0, 0, 60)
+	nameLabel.Size = UDim2.new(1, 0, 0, 40) -- Smaller but still prominent
 	nameLabel.BackgroundTransparency = 1
 	nameLabel.Font = Enum.Font.GothamBlack
-	nameLabel.TextSize = 42
+	nameLabel.TextSize = 28 -- Smaller but readable
 	nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 	nameLabel.TextXAlignment = Enum.TextXAlignment.Left
 	nameLabel.TextWrapped = true
@@ -301,25 +301,25 @@ local function showNewDiscoveryBanner(fishID, fishData, quantity)
 
 	-- 3. Rarity Badge & Price Container
 	local metaContainer = Instance.new("Frame")
-	metaContainer.Size = UDim2.new(1, 0, 0, 40)
+	metaContainer.Size = UDim2.new(1, 0, 0, 28) -- Smaller meta container
 	metaContainer.BackgroundTransparency = 1
 	metaContainer.LayoutOrder = 3
 	metaContainer.Parent = infoContainer
 
 	local metaLayout = Instance.new("UIListLayout")
 	metaLayout.FillDirection = Enum.FillDirection.Horizontal
-	metaLayout.Padding = UDim.new(0, 15)
+	metaLayout.Padding = UDim.new(0, 10) -- Tighter spacing
 	metaLayout.VerticalAlignment = Enum.VerticalAlignment.Center
 	metaLayout.Parent = metaContainer
 
 	-- Rarity Badge
 	local rarityBadge = Instance.new("Frame")
 	rarityBadge.BackgroundColor3 = rarityColor
-	rarityBadge.Size = UDim2.new(0, 120, 1, 0)
+	rarityBadge.Size = UDim2.new(0, 85, 1, 0) -- Smaller badge
 	rarityBadge.Parent = metaContainer
 	
 	local rarityCorner = Instance.new("UICorner")
-	rarityCorner.CornerRadius = UDim.new(0, 8)
+	rarityCorner.CornerRadius = UDim.new(0, 6) -- Smaller corner
 	rarityCorner.Parent = rarityBadge
 
 	local rarityTextLabel = Instance.new("TextLabel")
@@ -327,7 +327,7 @@ local function showNewDiscoveryBanner(fishID, fishData, quantity)
 	rarityTextLabel.BackgroundTransparency = 1
 	rarityTextLabel.Text = rarityText
 	rarityTextLabel.Font = Enum.Font.GothamBold
-	rarityTextLabel.TextSize = 14
+	rarityTextLabel.TextSize = 11 -- Smaller text
 	rarityTextLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 	rarityTextLabel.Parent = rarityBadge
 
@@ -339,20 +339,20 @@ local function showNewDiscoveryBanner(fishID, fishData, quantity)
 	priceTag.BackgroundTransparency = 1
 	priceTag.Font = Enum.Font.GothamBold
 	priceTag.TextColor3 = Colors.Success
-	priceTag.TextSize = 24
+	priceTag.TextSize = 16 -- Smaller price text
 	priceTag.Parent = metaContainer
 
 	-- 4. Tap to continue (Subtle)
 	local hintLabel = Instance.new("TextLabel")
-	hintLabel.Text = "Tap anywhere to continue..."
-	hintLabel.Size = UDim2.new(1, 0, 0, 30)
-	hintLabel.Position = UDim2.new(0.5, 0, 0.9, 0)
+	hintLabel.Text = "Tap to continue"
+	hintLabel.Size = UDim2.new(1, 0, 0, 18) -- Smaller hint
+	hintLabel.Position = UDim2.new(0.5, 0, 0.92, 0)
 	hintLabel.AnchorPoint = Vector2.new(0.5, 0.5)
 	hintLabel.BackgroundTransparency = 1
 	hintLabel.Font = Enum.Font.GothamMedium
-	hintLabel.TextSize = 14
-	hintLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-	hintLabel.TextTransparency = 0.5
+	hintLabel.TextSize = 11 -- Smaller text
+	hintLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
+	hintLabel.TextTransparency = 0.4
 	hintLabel.Parent = card
 
 	-- ==========================================
@@ -379,8 +379,8 @@ local function showNewDiscoveryBanner(fishID, fishData, quantity)
 			local modelSize = clonedModel:GetExtentsSize()
 			local maxDim = math.max(modelSize.X, modelSize.Y, modelSize.Z)
 			
-			local fov = 70
-			local fillFactor = 1.3 -- Slightly larger fill
+			local fov = 65 -- Slightly narrower FOV for bigger fish appearance
+			local fillFactor = 1.15 -- Closer zoom for compact UI
 			local distance = (maxDim / 2) / math.tan(math.rad(fov / 2)) * fillFactor
 			
 			local camera = Instance.new("Camera")
@@ -422,10 +422,10 @@ local function showNewDiscoveryBanner(fishID, fishData, quantity)
 	card.Size = UDim2.new(0, 0, 0, 0) -- Start at 0
 	card.Visible = true
 	
-	-- Target size is scale-based (constraints will handle aspect ratio)
+	-- Target size is scale-based (constraints will handle aspect ratio) - COMPACT
 	local popTween = TweenService:Create(card, 
-		TweenInfo.new(0.6, Enum.EasingStyle.Elastic, Enum.EasingDirection.Out), 
-		{Size = UDim2.new(0.85, 0, 0.5, 0)} -- Scale to 85% width, 50% height
+		TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), -- Faster, snappier animation
+		{Size = UDim2.new(0.55, 0, 0.38, 0)} -- COMPACT: 55% width, 38% height
 	)
 	popTween:Play()
 

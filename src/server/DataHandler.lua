@@ -56,12 +56,12 @@ local function getDefaultData(userId)
 		FishInventory = {}, -- Fish currently in inventory {fishId = count}
 		TotalFishCaught = 0, -- Total fish ever caught (stat)
 		
-		UnlockedTitles = {"Pengunjung"}, -- Array of unlocked title names
+		UnlockedTitles = {"Pemula"}, -- Array of unlocked title names
 		EquippedTitle = nil, -- Currently equipped title (nil = no title)
 
 		-- Title System (UPDATED)
-		Title = "Pengunjung",
-		TitleSource = "summit", -- "summit", "special", "admin"
+		Title = "Pemula",
+		TitleSource = "fisherman", -- "fisherman", "special", "admin"
 		SpecialTitle = nil, -- Untuk VIP, VVIP, Donatur, Admin, dll
 
 		-- Summit & Checkpoint (NEW - dipindahkan dari checkpoint script)

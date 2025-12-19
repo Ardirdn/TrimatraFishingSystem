@@ -242,9 +242,98 @@ local timerCounter = timerBar:WaitForChild("TimerCounter")
 
 local tapTapLabel = pullFrame:WaitForChild("TapTapLabel")
 
+-- ==================== THROW POWER UI ====================
+local throwFrame = fishingPanel:FindFirstChild("ThrowFrame")
+local throwFillBar = throwFrame and throwFrame:FindFirstChild("Fillbar")
+
+-- Create ThrowFrame if it doesn't exist
+if not throwFrame then
+	throwFrame = Instance.new("Frame")
+	throwFrame.Name = "ThrowFrame"
+	throwFrame.Size = UDim2.new(0, 30, 0.3, 0) -- Vertical bar
+	throwFrame.Position = UDim2.new(0.05, 0, 0.35, 0) -- Left side of screen
+	throwFrame.AnchorPoint = Vector2.new(0, 0)
+	throwFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+	throwFrame.BorderSizePixel = 0
+	throwFrame.Visible = false
+	throwFrame.Parent = fishingPanel
+	
+	-- Corner
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0.1, 0)
+	corner.Parent = throwFrame
+	
+	-- Stroke
+	local stroke = Instance.new("UIStroke")
+	stroke.Color = Color3.fromRGB(100, 100, 110)
+	stroke.Thickness = 2
+	stroke.Parent = throwFrame
+	
+	-- Fillbar container (fills from bottom to top)
+	local fillContainer = Instance.new("Frame")
+	fillContainer.Name = "FillContainer"
+	fillContainer.Size = UDim2.new(1, -8, 1, -8)
+	fillContainer.Position = UDim2.new(0.5, 0, 0.5, 0)
+	fillContainer.AnchorPoint = Vector2.new(0.5, 0.5)
+	fillContainer.BackgroundTransparency = 1
+	fillContainer.ClipsDescendants = true
+	fillContainer.Parent = throwFrame
+	
+	-- The actual fill bar
+	throwFillBar = Instance.new("Frame")
+	throwFillBar.Name = "Fillbar"
+	throwFillBar.Size = UDim2.new(1, 0, 0, 0) -- Starts empty
+	throwFillBar.Position = UDim2.new(0, 0, 1, 0) -- Anchored to bottom
+	throwFillBar.AnchorPoint = Vector2.new(0, 1)
+	throwFillBar.BackgroundColor3 = Color3.fromRGB(50, 200, 100)
+	throwFillBar.BorderSizePixel = 0
+	throwFillBar.Parent = fillContainer
+	
+	-- Fillbar corner
+	local fillCorner = Instance.new("UICorner")
+	fillCorner.CornerRadius = UDim.new(0.1, 0)
+	fillCorner.Parent = throwFillBar
+	
+	-- Gradient for premium look
+	local gradient = Instance.new("UIGradient")
+	gradient.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(50, 200, 100)),
+		ColorSequenceKeypoint.new(0.5, Color3.fromRGB(100, 255, 150)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(200, 255, 50))
+	})
+	gradient.Rotation = 90
+	gradient.Parent = throwFillBar
+	
+	-- Power label
+	local powerLabel = Instance.new("TextLabel")
+	powerLabel.Name = "PowerLabel"
+	powerLabel.Size = UDim2.new(3, 0, 0.1, 0)
+	powerLabel.Position = UDim2.new(0.5, 0, -0.02, 0)
+	powerLabel.AnchorPoint = Vector2.new(0.5, 1)
+	powerLabel.BackgroundTransparency = 1
+	powerLabel.Text = "POWER"
+	powerLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+	powerLabel.Font = Enum.Font.GothamBold
+	powerLabel.TextScaled = true
+	powerLabel.Parent = throwFrame
+end
+
+-- Throw power state
+local isCharging = false
+local chargeStartTime = 0
+local chargeConnection = nil
+local CHARGE_DURATION = 2.0 -- 2 seconds to fully charge
+local MIN_THROW_DISTANCE = 5 -- Minimum throw distance (studs)
+local currentThrowPower = 0 -- 0 to 1
+
+-- Retrieve button UI
+local retrieveButtonGui = nil
+local retrieveButton = nil
 
 
 assert(fillBar, "ERROR: Fillbar not found! Periksa struktur dan penamaan GUI")
+
+
 
 
 
@@ -565,6 +654,16 @@ local startBobbing
 local retrieveFloater
 local startPulling
 
+-- Forward declarations for retrieve button
+local createRetrieveButtonUI
+local showRetrieveButton
+local hideRetrieveButton
+
+-- Forward declarations for charging
+local startCharging
+local stopCharging
+local cancelCharging
+
 
 -- ========================================
 -- WIND ANIMATION CONFIG (Delegated to Module)
@@ -799,6 +898,8 @@ local function cleanupFishing()
 	end
 
 
+	-- ✅ Hide retrieve button on cleanup
+	hideRetrieveButton()
 	
 	-- ✅ REPLICATION: Notify server that fishing stopped
 	notifyReplication("NotifyStopFishing")
@@ -1633,7 +1734,9 @@ end
 
 local isThrowing = false
 
-local function throwFloater()
+local function throwFloater(throwPower)
+	throwPower = throwPower or 1.0 -- Default to max power if not specified
+	
 	-- Frame rate limiter check
 	if _getSM() < 0.5 then return end
 	
@@ -1719,38 +1822,107 @@ local function throwFloater()
 		task.wait(0.3)
 	end
 
-	-- CALCULATE TARGET POSITION
+	-- ✅ CALCULATE THROW DISTANCE BASED ON POWER
+	-- throwPower: 0 = MIN_THROW_DISTANCE, 1 = MaxThrowDistance
+	local maxDist = currentConfig.MaxThrowDistance
+	local minDist = MIN_THROW_DISTANCE
+	local throwDistance = minDist + (throwPower * (maxDist - minDist))
+
+	-- CALCULATE TARGET POSITION (using calculated throwDistance)
 	local startPos = edgePart.Position
 	local lookDirection = Character.PrimaryPart.CFrame.LookVector
-	local horizontalTarget = startPos + (lookDirection * currentConfig.MaxThrowDistance)
+	local horizontalTarget = startPos + (lookDirection * throwDistance)
 
-	-- RAYCAST untuk cari ground/water surface
+	-- ✅ IMPROVED RAYCAST: Start from player's Y level, not 200 studs above
+	-- This prevents hitting ceilings when fishing indoors
 	local rayParams = RaycastParams.new()
-	rayParams.FilterDescendantsInstances = {Character}
+	rayParams.FilterDescendantsInstances = {Character, currentFloater}
 	rayParams.FilterType = Enum.RaycastFilterType.Exclude
 
-	local rayOrigin = Vector3.new(horizontalTarget.X, horizontalTarget.Y + 200, horizontalTarget.Z)
-	local rayDirection = Vector3.new(0, -300, 0)
-	local rayResult = workspace:Raycast(rayOrigin, rayDirection, rayParams)
+	-- Start raycast from slightly above player's current Y position
+	local playerY = Character.PrimaryPart.Position.Y
+	local rayStartY = playerY + 5 -- Start 5 studs above player
+	local rayOrigin = Vector3.new(horizontalTarget.X, rayStartY, horizontalTarget.Z)
+	local rayDirection = Vector3.new(0, -100, 0) -- Raycast down 100 studs
 
-	local targetPos
-	if rayResult then
-		print("✅ Surface detected at Y:", rayResult.Position.Y)
-		local debugPart = Instance.new("Part")
-		debugPart.Size = Vector3.new(2, 0.5, 2)
-		debugPart.Position = rayResult.Position
-		debugPart.Anchored = true
-		debugPart.CanCollide = false
-		debugPart.Color = Color3.new(0, 1, 0)
-		debugPart.Material = Enum.Material.Neon
-		debugPart.Parent = workspace
-		task.delay(5, function() debugPart:Destroy() end)
-		targetPos = Vector3.new(horizontalTarget.X, rayResult.Position.Y + 0.5, horizontalTarget.Z)
-	else
-		warn("⚠️ No surface found!")
-		isFishing = false
-		isThrowing = false
-		return
+	local targetPos = nil
+	local maxAttempts = 10
+	local currentOrigin = rayOrigin
+
+	-- Helper function to check if a hit is a valid water surface
+	local function isWaterSurface(hitInstance)
+		if not hitInstance then return false end
+
+		-- Check if it's terrain water (terrain itself)
+		if hitInstance:IsA("Terrain") then
+			return true
+		end
+
+		-- Check part name for water keywords
+		local partName = hitInstance.Name:lower()
+		local waterKeywords = {"water", "lake", "river", "sea", "ocean", "pond", "pool", "laut", "sungai", "danau", "kolam"}
+		for _, keyword in ipairs(waterKeywords) do
+			if partName:find(keyword) then
+				return true
+			end
+		end
+
+		-- Check parent name for water keywords
+		if hitInstance.Parent then
+			local parentName = hitInstance.Parent.Name:lower()
+			for _, keyword in ipairs(waterKeywords) do
+				if parentName:find(keyword) then
+					return true
+				end
+			end
+		end
+
+		-- Check if it's a non-collidable transparent part (common water setup)
+		if hitInstance:IsA("BasePart") and not hitInstance.CanCollide and hitInstance.Transparency > 0.3 then
+			return true
+		end
+
+		return false
+	end
+
+	-- Keep raycasting through non-water surfaces until we find water or ground
+	for attempt = 1, maxAttempts do
+		local rayResult = workspace:Raycast(currentOrigin, rayDirection, rayParams)
+
+		if not rayResult then
+			-- No hit, use fallback position
+			break
+		end
+
+		local hitInstance = rayResult.Instance
+
+		-- Check if this is a valid water surface
+		if isWaterSurface(hitInstance) then
+			targetPos = Vector3.new(horizontalTarget.X, rayResult.Position.Y + 0.5, horizontalTarget.Z)
+			break
+		end
+
+		-- Check if it's a floor/ground (CanCollide = true, not transparent)
+		if hitInstance:IsA("BasePart") and hitInstance.CanCollide and hitInstance.Transparency < 0.3 then
+			-- This is likely a solid floor, check if it's below player
+			local partY = rayResult.Position.Y
+			if partY < playerY - 2 then
+				targetPos = Vector3.new(horizontalTarget.X, rayResult.Position.Y + 0.5, horizontalTarget.Z)
+				break
+			else
+				-- It's a ceiling or obstacle above us, skip it
+				-- Continue raycast from below this obstacle
+				currentOrigin = rayResult.Position + Vector3.new(0, -0.5, 0)
+			end
+		else
+			-- Unknown part type, continue raycast
+			currentOrigin = rayResult.Position + Vector3.new(0, -0.5, 0)
+		end
+	end
+
+	-- Fallback: use player's Y level if no valid surface found
+	if not targetPos then
+		targetPos = Vector3.new(horizontalTarget.X, playerY - 2, horizontalTarget.Z)
 	end
 
 	-- CLONE FLOATER (Use equipped floater from player data, fallback to rod config)
@@ -1865,7 +2037,281 @@ local function throwFloater()
 						pcall(function() obj:Destroy() end)
 					end
 				end
+				
+				-- ✅ Show retrieve button for manual fishing cancel
+				showRetrieveButton()
 			end)
+		end
+	end)
+end
+
+-- ========================================
+-- RETRIEVE BUTTON SYSTEM (Mobile-friendly)
+-- ========================================
+
+createRetrieveButtonUI = function()
+	if retrieveButtonGui then return end
+	
+	local playerGui = Player:WaitForChild("PlayerGui")
+	
+	-- Create ScreenGui
+	retrieveButtonGui = Instance.new("ScreenGui")
+	retrieveButtonGui.Name = "RetrieveButtonGUI"
+	retrieveButtonGui.ResetOnSpawn = false
+	retrieveButtonGui.DisplayOrder = 50
+	retrieveButtonGui.IgnoreGuiInset = true
+	retrieveButtonGui.Parent = playerGui
+	
+	-- Container for button (center-bottom, not at edge)
+	local container = Instance.new("Frame")
+	container.Name = "ButtonContainer"
+	container.Size = UDim2.new(0.25, 0, 0.08, 0) -- 25% width, 8% height (scale)
+	container.Position = UDim2.new(0.5, 0, 0.82, 0) -- Center-X, 82% from top
+	container.AnchorPoint = Vector2.new(0.5, 0.5)
+	container.BackgroundTransparency = 1
+	container.Parent = retrieveButtonGui
+	
+	-- Size constraint for min/max
+	local sizeConstraint = Instance.new("UISizeConstraint")
+	sizeConstraint.MinSize = Vector2.new(120, 45)
+	sizeConstraint.MaxSize = Vector2.new(280, 75)
+	sizeConstraint.Parent = container
+	
+	-- Main button
+	retrieveButton = Instance.new("TextButton")
+	retrieveButton.Name = "RetrieveButton"
+	retrieveButton.Size = UDim2.new(1, 0, 1, 0)
+	retrieveButton.BackgroundColor3 = Color3.fromRGB(220, 80, 80)
+	retrieveButton.BorderSizePixel = 0
+	retrieveButton.Text = "🎣 TARIK"
+	retrieveButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+	retrieveButton.Font = Enum.Font.GothamBlack
+	retrieveButton.TextScaled = true
+	retrieveButton.AutoButtonColor = true
+	retrieveButton.Parent = container
+	
+	-- Button corner
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0.3, 0)
+	corner.Parent = retrieveButton
+	
+	-- Button stroke (glow effect)
+	local stroke = Instance.new("UIStroke")
+	stroke.Color = Color3.fromRGB(255, 150, 150)
+	stroke.Thickness = 2
+	stroke.Transparency = 0.3
+	stroke.Parent = retrieveButton
+	
+	-- Gradient for premium look
+	local gradient = Instance.new("UIGradient")
+	gradient.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 100, 100)),
+		ColorSequenceKeypoint.new(0.5, Color3.fromRGB(220, 80, 80)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(180, 60, 60))
+	})
+	gradient.Rotation = 90
+	gradient.Parent = retrieveButton
+	
+	-- Text padding
+	local padding = Instance.new("UIPadding")
+	padding.PaddingLeft = UDim.new(0.1, 0)
+	padding.PaddingRight = UDim.new(0.1, 0)
+	padding.Parent = retrieveButton
+	
+	-- Initially hidden
+	container.Visible = false
+	
+	-- Button click handler
+	retrieveButton.MouseButton1Click:Connect(function()
+		if currentFloater and not isPulling and not isRetrieving then
+			isFloating = false
+			isFishing = false
+			if bobConnection then
+				bobConnection:Disconnect()
+				bobConnection = nil
+			end
+			retrieveFloater()
+		end
+	end)
+end
+
+function showRetrieveButton()
+	if not retrieveButtonGui then
+		createRetrieveButtonUI()
+	end
+	
+	local container = retrieveButtonGui and retrieveButtonGui:FindFirstChild("ButtonContainer")
+	if container then
+		container.Visible = true
+		
+		-- Pop-in animation
+		container.Size = UDim2.new(0, 0, 0, 0)
+		container:TweenSize(
+			UDim2.new(0.25, 0, 0.08, 0),
+			Enum.EasingDirection.Out,
+			Enum.EasingStyle.Back,
+			0.3, true
+		)
+	end
+end
+
+function hideRetrieveButton()
+	local container = retrieveButtonGui and retrieveButtonGui:FindFirstChild("ButtonContainer")
+	if container and container.Visible then
+		-- Pop-out animation
+		container:TweenSize(
+			UDim2.new(0, 0, 0, 0),
+			Enum.EasingDirection.In,
+			Enum.EasingStyle.Back,
+			0.2, true
+		)
+		task.delay(0.2, function()
+			if container then
+				container.Visible = false
+				-- Reset size for next show
+				container.Size = UDim2.new(0.25, 0, 0.08, 0)
+			end
+		end)
+	end
+end
+
+-- Create button on load (delay to ensure all functions are defined)
+task.delay(3, createRetrieveButtonUI)
+
+-- ==================== THROW CHARGING FUNCTIONS ====================
+
+local function updateThrowFillBar(power)
+	if not throwFillBar then return end
+	-- Animate fillbar Y scale from 0 to 1 with easing
+	local targetScale = math.clamp(power, 0, 1)
+	throwFillBar:TweenSize(
+		UDim2.new(1, 0, targetScale, 0),
+		Enum.EasingDirection.Out,
+		Enum.EasingStyle.Quad,
+		0.05, true
+	)
+end
+
+startCharging = function()
+	-- Validation checks
+	if isAnyUIOpen then return false end
+	if isRecovering then return false end
+	if isRetrieving then return false end
+	if isThrowing or isPulling then return false end
+	if not currentTool or not currentConfig then return false end
+	
+	-- If floater exists, this is a retrieve action, not charging
+	if currentFloater then return false end
+	
+	-- Reset stuck states
+	if isFloating and not currentFloater then isFloating = false end
+	if isFishing and not currentFloater then isFishing = false end
+	
+	-- Start charging
+	isCharging = true
+	chargeStartTime = tick()
+	currentThrowPower = 0
+	
+	-- Show throw frame and reset fillbar
+	if throwFrame then
+		throwFrame.Visible = true
+		if throwFillBar then
+			throwFillBar.Size = UDim2.new(1, 0, 0, 0)
+		end
+	end
+	
+	-- Create charge update loop
+	if chargeConnection then
+		chargeConnection:Disconnect()
+		chargeConnection = nil
+	end
+	
+	chargeConnection = RunService.Heartbeat:Connect(function(dt)
+		if not isCharging then
+			if chargeConnection then
+				chargeConnection:Disconnect()
+				chargeConnection = nil
+			end
+			return
+		end
+		
+		local elapsed = tick() - chargeStartTime
+		local power = math.clamp(elapsed / CHARGE_DURATION, 0, 1)
+		currentThrowPower = power
+		
+		-- Update UI with easing
+		updateThrowFillBar(power)
+		
+		-- Once fully charged, keep at max (don't decrease)
+		if power >= 1 then
+			currentThrowPower = 1
+		end
+	end)
+	
+	return true
+end
+
+stopCharging = function()
+	if not isCharging then return end
+	
+	-- Capture final power before stopping
+	local finalPower = currentThrowPower
+	isCharging = false
+	
+	-- Disconnect charge connection
+	if chargeConnection then
+		chargeConnection:Disconnect()
+		chargeConnection = nil
+	end
+	
+	-- Hide throw frame with animation
+	if throwFillBar then
+		throwFillBar:TweenSize(
+			UDim2.new(1, 0, 0, 0),
+			Enum.EasingDirection.In,
+			Enum.EasingStyle.Quad,
+			0.15, true
+		)
+	end
+	task.delay(0.15, function()
+		if throwFrame then
+			throwFrame.Visible = false
+		end
+	end)
+	
+	-- Execute throw with calculated power
+	if finalPower > 0 then
+		throwFloater(finalPower)
+	end
+	
+	-- Reset
+	currentThrowPower = 0
+end
+
+cancelCharging = function()
+	if not isCharging then return end
+	
+	isCharging = false
+	currentThrowPower = 0
+	
+	-- Disconnect charge connection
+	if chargeConnection then
+		chargeConnection:Disconnect()
+		chargeConnection = nil
+	end
+	
+	-- Hide throw frame
+	if throwFillBar then
+		throwFillBar:TweenSize(
+			UDim2.new(1, 0, 0, 0),
+			Enum.EasingDirection.In,
+			Enum.EasingStyle.Quad,
+			0.1, true
+		)
+	end
+	task.delay(0.1, function()
+		if throwFrame then
+			throwFrame.Visible = false
 		end
 	end)
 end
@@ -2162,19 +2608,11 @@ local function onMouseClick()
 		return
 	end
 
-	-- ✅ FIXED: If floater exists, handle retrieval
+	-- ✅ CHANGED: Left-click NO LONGER retrieves floater
+	-- If floater exists, just ignore left-click (use TARIK button instead)
 	if currentFloater then
-		if not isPulling then
-			warn("Player klik, ada floater aktif - RETRIEVE!")
-			isFloating = false
-			isFishing = false
-			if bobConnection then
-				bobConnection:Disconnect()
-				bobConnection = nil
-			end
-			retrieveFloater()
-			return
-		end
+		-- Do nothing - user must use TARIK button to retrieve
+		return
 	end
 	
 	-- ✅ FIXED: Reset stuck state - if isFloating but no currentFloater, reset state
@@ -2195,8 +2633,16 @@ local function onMouseClick()
 
 	if not currentTool or not currentConfig then return end
 
+	-- ✅ Start charging for throw (hold-to-throw)
+	startCharging()
+end
 
-	throwFloater()
+-- ✅ NEW: Handle mouse release to complete throw
+local function onMouseRelease()
+	-- Release charge and throw
+	if isCharging then
+		stopCharging()
+	end
 end
 
 
@@ -2251,6 +2697,9 @@ end
 
 
 local function onToolUnequipped()
+	
+	-- ✅ Cancel any charging in progress
+	cancelCharging()
 	
 	-- ✅ FIX: Force cancel pulling immediately
 	if isPulling then
@@ -2340,6 +2789,13 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	-- ✅ FIX: Support both Mouse AND Touch for Android
 	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 		onMouseClick()
+	end
+end)
+
+-- ✅ NEW: Handle input release for hold-to-throw
+UserInputService.InputEnded:Connect(function(input, gameProcessed)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		onMouseRelease()
 	end
 end)
 

@@ -9,6 +9,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local FishConfig = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("FishConfig"))
+local FishAreaSystem = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("FishAreaSystem"))
 local DataHandler = require(script.Parent.DataHandler)
 
 -- Create RemoteEvents
@@ -182,7 +183,7 @@ end
 -- FISH REWARD SYSTEM
 -- ============================================
 
-local function giveFishReward(player, success)
+local function giveFishReward(player, success, floaterPosition)
 
 
 	local data = DataHandler:GetData(player)
@@ -195,11 +196,11 @@ local function giveFishReward(player, success)
 		return
 	end
 
-	-- Get random fish
-	local fishId, fishData = FishConfig.GetRandomFish()
+	-- Get random fish based on area (uses floater position for area detection)
+	local fishId, fishData, areaName = FishAreaSystem.GetRandomFishInArea(floaterPosition)
 
 	if not fishId or not fishData then
-		warn("⚠️ No fish data available from FishConfig!")
+		warn("⚠️ No fish data available from FishAreaSystem!")
 		return
 	end
 
@@ -251,6 +252,11 @@ local function giveFishReward(player, success)
 		Price = fishData.Price or 0 -- For display purposes only
 	})
 	
+	-- Update player stats and check for title upgrade
+	local PlayerStats = require(script.Parent.PlayerStatsServer)
+	if PlayerStats and PlayerStats.UpdateFishCaught then
+		PlayerStats.UpdateFishCaught(player)
+	end
 
 end
 
@@ -259,9 +265,10 @@ end
 -- ============================================
 
 -- Client calls this when fishing success/fail
-FishingSuccessEvent.OnServerEvent:Connect(function(player, success)
+-- floaterPosition is optional - if provided, uses area-based fish selection
+FishingSuccessEvent.OnServerEvent:Connect(function(player, success, floaterPosition)
 
-	giveFishReward(player, success)
+	giveFishReward(player, success, floaterPosition)
 end)
 
 -- Get fish inventory (for display purposes)

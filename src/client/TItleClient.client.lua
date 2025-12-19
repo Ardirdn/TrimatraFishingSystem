@@ -259,8 +259,8 @@ local function updateTitleDisplay(character, titleName)
 	-- Get title data from config
 	local titleData = nil
 
-	-- Check Summit Titles first
-	for _, data in ipairs(TitleConfig.SummitTitles) do
+	-- Check Fisherman Titles first
+	for _, data in ipairs(TitleConfig.FishermanTitles or {}) do
 		if data.Name == titleName then
 			titleData = data
 			break
@@ -279,7 +279,7 @@ local function updateTitleDisplay(character, titleName)
 	end
 
 	if titleData then
-		if titleName == "Pengunjung" then
+		if titleName == "Pemula" then
 			titleBadge.Visible = false
 			-- Reset stroke to default
 			if mainStroke then

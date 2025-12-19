@@ -88,15 +88,15 @@ local function hasGamepass(userId, gamepassId)
 	return success and hasPass
 end
 
--- Helper: Get Summit Title berdasarkan jumlah summit
-local function getSummitTitle(totalSummits)
-	local highestTitle = TitleConfig.SummitTitles[1] -- Default: Pengunjung
+-- Helper: Get Fisherman Title berdasarkan jumlah ikan yang ditangkap
+local function getFishermanTitle(totalFishCaught)
+	local highestTitle = TitleConfig.FishermanTitles[1] -- Default: Pemula
 
-	for _, titleData in ipairs(TitleConfig.SummitTitles) do
-		if totalSummits >= titleData.MinSummits then
+	for _, titleData in ipairs(TitleConfig.FishermanTitles) do
+		if totalFishCaught >= titleData.MinFishCaught then
 			highestTitle = titleData
 		else
-			break -- Karena sudah sorted by MinSummits
+			break -- Karena sudah sorted by MinFishCaught
 		end
 	end
 
@@ -105,8 +105,8 @@ end
 
 -- Helper: Get Title Data (Summit atau Special)
 function TitleServer:GetTitleData(titleName)
-	-- Check Summit Titles
-	for _, titleData in ipairs(TitleConfig.SummitTitles) do
+	-- Check Fisherman Titles
+	for _, titleData in ipairs(TitleConfig.FishermanTitles) do
 		if titleData.Name == titleName then
 			return titleData
 		end
@@ -135,7 +135,7 @@ function TitleServer:UnlockTitle(player, titleName)
 
 	-- Ensure UnlockedTitles exists
 	if not data.UnlockedTitles then
-		data.UnlockedTitles = {"Pengunjung"}
+		data.UnlockedTitles = {"Pemula"}
 		DataHandler:Set(player, "UnlockedTitles", data.UnlockedTitles)
 	end
 
@@ -168,9 +168,9 @@ function TitleServer:UnlockTitle(player, titleName)
 	return true
 end
 
-function TitleServer:UnlockSummitTitles(player, totalSummits)
-	for _, titleData in ipairs(TitleConfig.SummitTitles) do
-		if totalSummits >= titleData.MinSummits then
+function TitleServer:UnlockFishermanTitles(player, totalFishCaught)
+	for _, titleData in ipairs(TitleConfig.FishermanTitles) do
+		if totalFishCaught >= titleData.MinFishCaught then
 			self:UnlockTitle(player, titleData.Name)
 		end
 	end
@@ -184,7 +184,7 @@ function TitleServer:EquipTitle(player, titleName)
 
 	-- Ensure UnlockedTitles exists
 	if not data.UnlockedTitles then
-		data.UnlockedTitles = {"Pengunjung"}
+		data.UnlockedTitles = {"Pemula"}
 	end
 
 	-- Check if title is unlocked
@@ -406,18 +406,18 @@ function TitleServer:DetermineTitle(player)
 		return "Donatur"
 	end
 
-	-- 6. Summit Title (based on TotalSummits)
-	local summitTitle = getSummitTitle(data.TotalSummits or 0)
-	return summitTitle
+	-- 6. Fisherman Title (based on TotalFishCaught)
+	local fishermanTitle = getFishermanTitle(data.TotalFishCaught or 0)
+	return fishermanTitle
 end
 
-function TitleServer:UpdateSummitTitle(player)
+function TitleServer:UpdateFishermanTitle(player)
 	local data = DataHandler:GetData(player)
 	if not data then return end
 
 	-- Check if player has equipped title (manual selection)
 	if data.EquippedTitle then
-		self:UnlockSummitTitles(player, data.TotalSummits or 0)
+		self:UnlockFishermanTitles(player, data.TotalFishCaught or 0)
 		return
 	end
 
@@ -426,19 +426,19 @@ function TitleServer:UpdateSummitTitle(player)
 		return
 	end
 
-	if data.TitleSource and data.TitleSource ~= "summit" then
+	if data.TitleSource and data.TitleSource ~= "fisherman" then
 		return
 	end
 
-	local newTitle = getSummitTitle(data.TotalSummits or 0)
+	local newTitle = getFishermanTitle(data.TotalFishCaught or 0)
 	local currentTitle = data.Title
 
-	-- Unlock new summit titles
-	self:UnlockSummitTitles(player, data.TotalSummits or 0)
+	-- Unlock new fisherman titles
+	self:UnlockFishermanTitles(player, data.TotalFishCaught or 0)
 
 	if newTitle ~= currentTitle then
 		DataHandler:Set(player, "Title", newTitle)
-		DataHandler:Set(player, "TitleSource", "summit")
+		DataHandler:Set(player, "TitleSource", "fisherman")
 		DataHandler:SavePlayer(player)
 		self:BroadcastTitle(player, newTitle)
 	end
@@ -481,15 +481,15 @@ function TitleServer:SetTitle(player, titleName, source, isSpecial)
 
 	local data = DataHandler:GetData(player)
 
-	local isSummitTitle = false
-	for _, titleData in ipairs(TitleConfig.SummitTitles) do
+	local isFishermanTitle = false
+	for _, titleData in ipairs(TitleConfig.FishermanTitles or {}) do
 		if titleData.Name == titleName then
-			isSummitTitle = true
+			isFishermanTitle = true
 			break
 		end
 	end
 
-	if isSummitTitle then
+	if isFishermanTitle then
 		isSpecial = false
 	end
 
@@ -510,15 +510,15 @@ function TitleServer:SetTitle(player, titleName, source, isSpecial)
 		return true
 	else
 		DataHandler:Set(player, "SpecialTitle", "")
-		DataHandler:Set(player, "TitleSource", "summit")
+		DataHandler:Set(player, "TitleSource", "fisherman")
 
-		local correctSummitTitle = getSummitTitle(data.TotalSummits or 0)
-		DataHandler:Set(player, "Title", correctSummitTitle)
+		local correctFishermanTitle = getFishermanTitle(data.TotalFishCaught or 0)
+		DataHandler:Set(player, "Title", correctFishermanTitle)
 		DataHandler:SavePlayer(player)
 
 
 
-		self:BroadcastTitle(player, correctSummitTitle)
+		self:BroadcastTitle(player, correctFishermanTitle)
 		return true
 	end
 end
@@ -564,12 +564,12 @@ function TitleServer:InitializePlayer(player)
 
 	-- ✅ Ensure UnlockedTitles exists
 	if not data.UnlockedTitles then
-		data.UnlockedTitles = {"Pengunjung"}
+		data.UnlockedTitles = {"Pemula"}
 		DataHandler:Set(player, "UnlockedTitles", data.UnlockedTitles)
 	end
 
-	-- ✅ Unlock summit titles based on current summits
-	self:UnlockSummitTitles(player, data.TotalSummits or 0)
+	-- ✅ Unlock fisherman titles based on total fish caught
+	self:UnlockFishermanTitles(player, data.TotalFishCaught or 0)
 
 	-- ✅ Check for special titles
 	if table.find(TitleConfig.AdminIds, player.UserId) then

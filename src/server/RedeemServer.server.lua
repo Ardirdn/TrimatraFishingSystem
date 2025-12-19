@@ -108,9 +108,9 @@ end
 local function getTitleRank(titleId)
 	if not titleId then return 0 end
 
-	-- ✅ CHECK SummitTitles
-	if TitleConfig.SummitTitles then
-		for i, title in ipairs(TitleConfig.SummitTitles) do
+	-- ✅ CHECK FishermanTitles
+	if TitleConfig.FishermanTitles then
+		for i, title in ipairs(TitleConfig.FishermanTitles) do
 			if title.Name == titleId then
 				return i
 			end
@@ -396,9 +396,9 @@ getRewardOptionsFunc.OnServerInvoke = function(player, rewardType)
 	if rewardType == "Title" then
 		local titles = {}
 
-		-- ✅ SummitTitles
-		if TitleConfig.SummitTitles then
-			for _, title in ipairs(TitleConfig.SummitTitles) do
+		-- ✅ FishermanTitles
+		if TitleConfig.FishermanTitles then
+			for _, title in ipairs(TitleConfig.FishermanTitles) do
 				table.insert(titles, {
 					Id = title.Name,
 					Name = title.DisplayName,

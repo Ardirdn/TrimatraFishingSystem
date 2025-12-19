@@ -119,9 +119,9 @@ TextChatService.OnIncomingMessage = function(message: TextChatMessage)
 	if TitleConfig.SpecialTitles[titleName] then
 		titleData = TitleConfig.SpecialTitles[titleName]
 	else
-		for _, summitTitle in ipairs(TitleConfig.SummitTitles) do
-			if summitTitle.Name == titleName then
-				titleData = summitTitle
+		for _, fishermanTitle in ipairs(TitleConfig.FishermanTitles or {}) do
+			if fishermanTitle.Name == titleName then
+				titleData = fishermanTitle
 				break
 			end
 		end

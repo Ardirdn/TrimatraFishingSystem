@@ -416,7 +416,7 @@ end
 
 createTitleFilterBtn("All", "All")
 createTitleFilterBtn("Special", "Special")
-createTitleFilterBtn("Summit", "Summit")
+createTitleFilterBtn("Fisherman", "Fisherman")
 
 -- Titles Scroll
 local titlesScroll = Instance.new("ScrollingFrame")
@@ -615,7 +615,7 @@ end
 local function createTitleItem(titleName)
 	local titleInfo = nil
 
-	for _, titleData in ipairs(TitleConfig.SummitTitles) do
+	for _, titleData in ipairs(TitleConfig.FishermanTitles or {}) do
 		if titleData.Name == titleName then
 			titleInfo = titleData
 			break
@@ -767,11 +767,11 @@ function updateTitlesTab()
 
 	for _, titleName in ipairs(titleData.UnlockedTitles) do
 		local isSpecial = TitleConfig.SpecialTitles[titleName] ~= nil
-		local isSummit = false
+		local isFisherman = false
 
-		for _, summitTitle in ipairs(TitleConfig.SummitTitles) do
-			if summitTitle.Name == titleName then
-				isSummit = true
+		for _, fishermanTitle in ipairs(TitleConfig.FishermanTitles or {}) do
+			if fishermanTitle.Name == titleName then
+				isFisherman = true
 				break
 			end
 		end
@@ -780,7 +780,7 @@ function updateTitlesTab()
 			table.insert(itemsToShow, titleName)
 		elseif currentTitleFilter == "Special" and isSpecial then
 			table.insert(itemsToShow, titleName)
-		elseif currentTitleFilter == "Summit" and isSummit then
+		elseif currentTitleFilter == "Fisherman" and isFisherman then
 			table.insert(itemsToShow, titleName)
 		end
 	end

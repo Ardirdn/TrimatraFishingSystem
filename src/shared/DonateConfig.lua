@@ -11,99 +11,99 @@ DonateConfig.DonationThreshold = 1000 -- Robux
 -- Donation Packages
 DonateConfig.Packages = {
 	{
-		Title = "Starter",
-		Description = "Support kecil",
+		Title = "Pendukung",
+		Description = "Terima kasih atas dukunganmu",
 		Amount = 10,
-		ProductId = 3465203706, -- ⚠️ GANTI DENGAN PRODUCT ID ASLI
-		Thumbnail = "rbxassetid://7733992358",
+		ProductId = 3477232102,
+		Thumbnail = "rbxassetid://80414324814070",
 		Color = Color3.fromRGB(100, 149, 237)
 	},
 	{
-		Title = "Bronze",
-		Description = "Dukungan Bronze",
+		Title = "Supporter",
+		Description = "Dukungan yang berarti",
 		Amount = 25,
-		ProductId = 3465203890,
-		Thumbnail = "rbxassetid://7733992358",
+		ProductId = 3477234178,
+		Thumbnail = "rbxassetid://80414324814070",
 		Color = Color3.fromRGB(205, 127, 50)
 	},
 	{
-		Title = "Silver",
-		Description = "Dukungan Silver",
+		Title = "Dermawan",
+		Description = "Kebaikan nyata",
 		Amount = 50,
-		ProductId = 3465204030,
-		Thumbnail = "rbxassetid://7733992358",
+		ProductId = 3477234813,
+		Thumbnail = "rbxassetid://80414324814070",
 		Color = Color3.fromRGB(192, 192, 192)
 	},
 	{
-		Title = "Gold",
-		Description = "Dukungan Gold",
+		Title = "Donatur",
+		Description = "Kontribusi besar",
 		Amount = 100,
-		ProductId = 3465204182,
-		Thumbnail = "rbxassetid://7733992358",
+		ProductId = 3477235073,
+		Thumbnail = "rbxassetid://80414324814070",
 		Color = Color3.fromRGB(255, 215, 0)
 	},
 	{
-		Title = "Platinum",
-		Description = "Dukungan Platinum",
+		Title = "Patron",
+		Description = "Pendukung setia",
 		Amount = 250,
-		ProductId = 3465204299,
-		Thumbnail = "rbxassetid://7733992358",
+		ProductId = 3477236527,
+		Thumbnail = "rbxassetid://80414324814070",
 		Color = Color3.fromRGB(229, 228, 226)
 	},
 	{
-		Title = "Diamond",
-		Description = "Dukungan Diamond",
+		Title = "Sponsor",
+		Description = "Dukungan premium",
 		Amount = 500,
-		ProductId = 3465204387,
-		Thumbnail = "rbxassetid://7733992358",
+		ProductId = 3477237448,
+		Thumbnail = "rbxassetid://80414324814070",
 		Color = Color3.fromRGB(185, 242, 255)
 	},
 	{
-		Title = "Master",
-		Description = "Dukungan Master",
+		Title = "Elite",
+		Description = "Level elite",
 		Amount = 1000,
-		ProductId = 3465204599,
-		Thumbnail = "rbxassetid://7733992358",
+		ProductId = 3477238669,
+		Thumbnail = "rbxassetid://80414324814070",
 		Color = Color3.fromRGB(138, 43, 226)
 	},
 	{
-		Title = "Champion",
-		Description = "Dukungan Champion",
+		Title = "VIP",
+		Description = "Status VIP",
 		Amount = 2500,
-		ProductId = 3465204761,
-		Thumbnail = "rbxassetid://7733992358",
+		ProductId = 3477239301,
+		Thumbnail = "rbxassetid://80414324814070",
 		Color = Color3.fromRGB(255, 69, 0)
 	},
 	{
 		Title = "Legend",
-		Description = "Dukungan Legend",
+		Description = "Tier legendaris",
 		Amount = 5000,
-		ProductId = 3465204885,
-		Thumbnail = "rbxassetid://7733992358",
+		ProductId = 3477240204,
+		Thumbnail = "rbxassetid://80414324814070",
 		Color = Color3.fromRGB(255, 0, 255)
 	},
 	{
 		Title = "Mythic",
-		Description = "Dukungan Mythic",
+		Description = "Tier mythic",
 		Amount = 10000,
-		ProductId = 3465205043,
-		Thumbnail = "rbxassetid://7733992358",
+		ProductId = 3477240475,
+		Thumbnail = "rbxassetid://80414324814070",
 		Color = Color3.fromRGB(255, 20, 147)
 	},
 	{
-		Title = "Divine",
-		Description = "Dukungan Divine",
+		Title = "Supreme",
+		Description = "Tier supreme",
 		Amount = 25000,
-		ProductId = 3465205182,
-		Thumbnail = "rbxassetid://7733992358",
+		ProductId = 3477240678,
+		Thumbnail = "rbxassetid://80414324814070",
 		Color = Color3.fromRGB(255, 255, 0)
 	},
 	{
-		Title = "Supreme",
-		Description = "Dukungan Supreme",
+		Title = "Ultimate",
+		Description = "Tier tertinggi",
 		Amount = 50000,
-		ProductId = 3465205311,
-		Thumbnail = "rbxassetid://7733992358",
+		ProductId = 3477240934,
+		Thumbnail = "rbxassetid://80414324814070",
 		Color = Color3.fromRGB(255, 0, 0)
 	},
 }

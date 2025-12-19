@@ -1,0 +1,593 @@
+--[[
+	Freecam - ANDROID OPTIMIZED
+	Place in ReplicatedStorage
+	
+	Android Controls:
+	- Left joystick: Move camera (forward/back/left/right/up/down)
+	- Right side touch: Look around (pan camera)
+	- Two-finger pinch: Zoom (FOV)
+]]
+
+local Freecam = {}
+
+local pi = math.pi
+local abs = math.abs
+local clamp = math.clamp
+local exp = math.exp
+local rad = math.rad
+local sign = math.sign
+local sqrt = math.sqrt
+local tan = math.tan
+
+local ContextActionService = game:GetService("ContextActionService")
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local StarterGui = game:GetService("StarterGui")
+local UserInputService = game:GetService("UserInputService")
+local Workspace = game:GetService("Workspace")
+
+local LocalPlayer = Players.LocalPlayer
+if not LocalPlayer then
+	Players:GetPropertyChangedSignal("LocalPlayer"):Wait()
+	LocalPlayer = Players.LocalPlayer
+end
+
+local Camera = Workspace.CurrentCamera
+Workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
+	local newCamera = Workspace.CurrentCamera
+	if newCamera then
+		Camera = newCamera
+	end
+end)
+
+------------------------------------------------------------------------
+
+local INPUT_PRIORITY = Enum.ContextActionPriority.High.Value
+
+local NAV_GAIN = Vector3.new(1, 1, 1) * 36
+local PAN_GAIN = Vector2.new(0.75, 1) * 8
+local FOV_GAIN = 300
+
+local PITCH_LIMIT = rad(90)
+
+local VEL_STIFFNESS = 1.5
+local PAN_STIFFNESS = 1.0
+local FOV_STIFFNESS = 4.0
+
+------------------------------------------------------------------------
+
+local Spring = {}
+do
+	Spring.__index = Spring
+
+	function Spring.new(freq, pos)
+		local self = setmetatable({}, Spring)
+		self.f = freq
+		self.p = pos
+		self.v = pos * 0
+		return self
+	end
+
+	function Spring:Update(dt, goal)
+		local f = self.f * 2 * pi
+		local p0 = self.p
+		local v0 = self.v
+
+		local offset = goal - p0
+		local decay = exp(-f * dt)
+
+		local p1 = goal + (v0 * dt - offset * (f * dt + 1)) * decay
+		local v1 = (f * dt * (offset * f - v0) + v0) * decay
+
+		self.p = p1
+		self.v = v1
+
+		return p1
+	end
+
+	function Spring:Reset(pos)
+		self.p = pos
+		self.v = pos * 0
+	end
+end
+
+------------------------------------------------------------------------
+
+local cameraPos = Vector3.new()
+local cameraRot = Vector2.new()
+local cameraFov = 0
+
+local velSpring = Spring.new(VEL_STIFFNESS, Vector3.new())
+local panSpring = Spring.new(PAN_STIFFNESS, Vector2.new())
+local fovSpring = Spring.new(FOV_STIFFNESS, 0)
+
+------------------------------------------------------------------------
+local isActive = false
+local onEndedCallback = nil
+------------------------------------------------------------------------
+
+local PlayerState = {} do
+	local mouseBehavior
+	local mouseIconEnabled
+	local cameraType
+	local cameraFocus
+	local cameraCFrame
+	local cameraFieldOfView
+	local screenGuis = {}
+	local coreGuis = {
+		Backpack = true,
+		Chat = true,
+		Health = true,
+		PlayerList = true,
+	}
+	local setCores = {
+		BadgesNotificationsActive = true,
+		PointsNotificationsActive = true,
+	}
+
+	local character = nil
+	local humanoid = nil
+	local originalWalkSpeed = 0
+	local originalJumpPower = 0
+	local originalAutoRotate = true
+
+	local controlModule = nil
+
+	function PlayerState.GetControlModule()
+		return controlModule
+	end
+
+	function PlayerState.Push()
+		for name in pairs(coreGuis) do
+			coreGuis[name] = StarterGui:GetCoreGuiEnabled(Enum.CoreGuiType[name])
+			StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType[name], false)
+		end
+		for name in pairs(setCores) do
+			setCores[name] = StarterGui:GetCore(name)
+			StarterGui:SetCore(name, false)
+		end
+		local playergui = LocalPlayer:FindFirstChildOfClass("PlayerGui")
+		if playergui then
+			for _, gui in pairs(playergui:GetChildren()) do
+				if gui:IsA("ScreenGui") and gui.Enabled and gui.Name ~= "MainScreen" and gui.Name ~= "CinematicCameraGui" then
+					table.insert(screenGuis, gui)
+					gui.Enabled = false
+				end
+			end
+		end
+		cameraFieldOfView = Camera.FieldOfView
+		Camera.FieldOfView = 70
+		cameraType = Camera.CameraType
+		Camera.CameraType = Enum.CameraType.Scriptable
+		cameraCFrame = Camera.CFrame
+		cameraFocus = Camera.Focus
+		mouseBehavior = UserInputService.MouseBehavior
+		UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
+		mouseIconEnabled = UserInputService.MouseIconEnabled
+		UserInputService.MouseIconEnabled = false
+
+		-- Get PlayerModule controls
+		pcall(function()
+			local playerScripts = LocalPlayer:WaitForChild("PlayerScripts")
+			local playerModule = require(playerScripts:WaitForChild("PlayerModule"))
+			controlModule = playerModule.controls
+		end)
+
+		character = LocalPlayer.Character
+		if character then
+			humanoid = character:FindFirstChildOfClass("Humanoid")
+			if humanoid then
+				originalWalkSpeed = humanoid.WalkSpeed
+				originalJumpPower = humanoid.JumpPower
+				originalAutoRotate = humanoid.AutoRotate
+
+				humanoid.WalkSpeed = 0
+				humanoid.JumpPower = 0
+				humanoid.AutoRotate = false
+			end
+		end
+	end
+
+	function PlayerState.Pop()
+		for name, isEnabled in pairs(coreGuis) do
+			StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType[name], isEnabled)
+		end
+		for name, isEnabled in pairs(setCores) do
+			StarterGui:SetCore(name, isEnabled)
+		end
+		for _, gui in pairs(screenGuis) do
+			if gui.Parent then
+				gui.Enabled = true
+			end
+		end
+		screenGuis = {}
+
+		Camera.FieldOfView = cameraFieldOfView
+		cameraFieldOfView = nil
+		Camera.CameraType = cameraType
+		cameraType = nil
+		Camera.CFrame = cameraCFrame
+		cameraCFrame = nil
+		Camera.Focus = cameraFocus
+		cameraFocus = nil
+		UserInputService.MouseBehavior = mouseBehavior
+		mouseBehavior = nil
+		UserInputService.MouseIconEnabled = mouseIconEnabled
+		mouseIconEnabled = nil
+
+		if humanoid then
+			humanoid.WalkSpeed = originalWalkSpeed
+			humanoid.JumpPower = originalJumpPower
+			humanoid.AutoRotate = originalAutoRotate
+		end
+
+		character = nil
+		humanoid = nil
+		controlModule = nil
+	end
+end
+
+local Input = {}
+do
+	local thumbstickCurve do
+		local K_CURVATURE = 2.0
+		local K_DEADZONE = 0.15
+
+		local function fCurve(x)
+			return (exp(K_CURVATURE * x) - 1) / (exp(K_CURVATURE) - 1)
+		end
+
+		local function fDeadzone(x)
+			return fCurve((x - K_DEADZONE) / (1 - K_DEADZONE))
+		end
+
+		function thumbstickCurve(x)
+			return sign(x) * clamp(fDeadzone(abs(x)), 0, 1)
+		end
+	end
+
+	local gamepad = {
+		ButtonX = 0,
+		ButtonY = 0,
+		DPadDown = 0,
+		DPadUp = 0,
+		ButtonL2 = 0,
+		ButtonR2 = 0,
+		Thumbstick1 = Vector2.new(),
+		Thumbstick2 = Vector2.new(),
+	}
+
+	local keyboard = {
+		W = 0,
+		A = 0,
+		S = 0,
+		D = 0,
+		E = 0,
+		Q = 0,
+		U = 0,
+		H = 0,
+		J = 0,
+		K = 0,
+		I = 0,
+		Y = 0,
+		Up = 0,
+		Down = 0,
+		LeftShift = 0,
+		RightShift = 0,
+	}
+
+	local mouse = {
+		Delta = Vector2.new(),
+		MouseWheel = 0,
+	}
+
+	local touch = {
+		Delta = Vector2.new(),
+		PinchDelta = 0,
+	}
+
+	local PAN_MOUSE_SPEED = Vector2.new(1, 1) * (pi / 64)
+	local PAN_GAMEPAD_SPEED = Vector2.new(1, 1) * (pi / 8)
+	local PAN_TOUCH_SPEED = Vector2.new(1, 1) * (pi / 96) -- Smoother for touch
+	local FOV_WHEEL_SPEED = 1.0
+	local FOV_GAMEPAD_SPEED = 0.25
+	local FOV_PINCH_SPEED = 0.08 -- More sensitive
+	local NAV_ADJ_SPEED = 0.75
+	local NAV_SHIFT_MUL = 0.25
+
+	local navSpeed = 1
+
+	function Input.Vel(dt)
+		navSpeed = clamp(navSpeed + dt * (keyboard.Up - keyboard.Down) * NAV_ADJ_SPEED, 0.01, 4)
+
+		local moveVector = Vector3.new()
+
+		-- Get movement from PlayerModule (joystick on mobile)
+		local controls = PlayerState.GetControlModule()
+		if controls then
+			moveVector = controls:GetMoveVector()
+		end
+
+		-- Vertical movement (E/Q keys or triggers)
+		local kbd_vertical = keyboard.E - keyboard.Q + (thumbstickCurve(gamepad.ButtonR2) - thumbstickCurve(gamepad.ButtonL2))
+
+		local finalMove
+		if moveVector.Magnitude > 0.01 then
+			-- Use joystick/WASD input
+			finalMove = Vector3.new(moveVector.X, kbd_vertical, moveVector.Z)
+		else
+			-- Fallback to keyboard
+			finalMove = Vector3.new(
+				keyboard.D - keyboard.A,
+				kbd_vertical,
+				keyboard.S - keyboard.W
+			)
+		end
+
+		local shift = UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) or UserInputService:IsKeyDown(Enum.KeyCode.RightShift)
+
+		return finalMove * (navSpeed * (shift and NAV_SHIFT_MUL or 1))
+	end
+
+	function Input.Pan(dt)
+		local kGamepad = Vector2.new(
+			thumbstickCurve(gamepad.Thumbstick2.Y),
+			thumbstickCurve(-gamepad.Thumbstick2.X)
+		) * PAN_GAMEPAD_SPEED
+
+		local kMouse = mouse.Delta * PAN_MOUSE_SPEED
+		mouse.Delta = Vector2.new()
+
+		local kTouch = touch.Delta * PAN_TOUCH_SPEED
+		touch.Delta = Vector2.new()
+
+		return kGamepad + kMouse + kTouch
+	end
+
+	function Input.Fov(dt)
+		local kGamepad = (gamepad.ButtonX - gamepad.ButtonY) * FOV_GAMEPAD_SPEED
+		local kMouse = mouse.MouseWheel * FOV_WHEEL_SPEED
+		mouse.MouseWheel = 0
+
+		local kTouch = touch.PinchDelta * FOV_PINCH_SPEED
+		touch.PinchDelta = 0
+
+		return kGamepad + kMouse + kTouch
+	end
+
+	do
+		local function Keypress(action, state, input)
+			keyboard[input.KeyCode.Name] = state == Enum.UserInputState.Begin and 1 or 0
+			return Enum.ContextActionResult.Sink
+		end
+
+		local function GpButton(action, state, input)
+			gamepad[input.KeyCode.Name] = state == Enum.UserInputState.Begin and 1 or 0
+			return Enum.ContextActionResult.Sink
+		end
+
+		local function MousePan(action, state, input)
+			local delta = input.Delta
+			mouse.Delta = Vector2.new(-delta.y, -delta.x)
+			return Enum.ContextActionResult.Sink
+		end
+
+		local activeTouches = {}
+		local lastPinchDist = 0
+
+		-- ANDROID TOUCH HANDLER
+		local function HandleTouch(actionName, state, input)
+			if input.UserInputType ~= Enum.UserInputType.Touch then 
+				return Enum.ContextActionResult.Pass 
+			end
+
+			local touchId = tostring(input)
+			local screenWidth = Camera.ViewportSize.X
+
+			if state == Enum.UserInputState.Begin then
+				-- Only track touches on right half (for camera pan)
+				-- Left half is reserved for joystick
+				if input.Position.X > screenWidth / 2 then
+					activeTouches[touchId] = input.Position
+				else
+					return Enum.ContextActionResult.Pass
+				end
+
+			elseif state == Enum.UserInputState.End then
+				activeTouches[touchId] = nil
+
+				local remaining = 0
+				for _ in pairs(activeTouches) do remaining = remaining + 1 end
+				if remaining < 2 then
+					lastPinchDist = 0
+				end
+
+			elseif state == Enum.UserInputState.Change then
+				if not activeTouches[touchId] then
+					return Enum.ContextActionResult.Pass
+				end
+
+				activeTouches[touchId] = input.Position
+
+				local positions = {}
+				for _, pos in pairs(activeTouches) do
+					table.insert(positions, pos)
+				end
+
+				local count = #positions
+
+				if count == 1 then
+					-- Pan with one finger (right side only)
+					local delta = input.Delta
+					touch.Delta = Vector2.new(-delta.Y, -delta.X)
+
+				elseif count == 2 then
+					-- Pinch zoom with two fingers
+					local dist = (positions[1] - positions[2]).Magnitude
+
+					if lastPinchDist > 0 then
+						touch.PinchDelta = -(dist - lastPinchDist)
+					end
+					lastPinchDist = dist
+				end
+			end
+
+			return Enum.ContextActionResult.Sink
+		end
+
+		local function Thumb(action, state, input)
+			gamepad[input.KeyCode.Name] = input.Position
+			return Enum.ContextActionResult.Sink
+		end
+
+		local function Trigger(action, state, input)
+			gamepad[input.KeyCode.Name] = input.Position.z
+			return Enum.ContextActionResult.Sink
+		end
+
+		local function MouseWheel(action, state, input)
+			mouse[input.UserInputType.Name] = -input.Position.z
+			return Enum.ContextActionResult.Sink
+		end
+
+		local function Zero(t)
+			for k, v in pairs(t) do
+				t[k] = v * 0
+			end
+		end
+
+		function Input.StartCapture()
+			ContextActionService:BindActionAtPriority(
+				"FreecamKeyboard",
+				Keypress,
+				false,
+				INPUT_PRIORITY,
+				Enum.KeyCode.W,
+				Enum.KeyCode.U,
+				Enum.KeyCode.A,
+				Enum.KeyCode.H,
+				Enum.KeyCode.S,
+				Enum.KeyCode.J,
+				Enum.KeyCode.D,
+				Enum.KeyCode.K,
+				Enum.KeyCode.E,
+				Enum.KeyCode.I,
+				Enum.KeyCode.Q,
+				Enum.KeyCode.Y,
+				Enum.KeyCode.Up,
+				Enum.KeyCode.Down
+			)
+			ContextActionService:BindActionAtPriority("FreecamMousePan", MousePan, false, INPUT_PRIORITY, Enum.UserInputType.MouseMovement)
+			ContextActionService:BindActionAtPriority("FreecamMouseWheel", MouseWheel, false, INPUT_PRIORITY, Enum.UserInputType.MouseWheel)
+			ContextActionService:BindActionAtPriority("FreecamGamepadButton", GpButton, false, INPUT_PRIORITY, Enum.KeyCode.ButtonX, Enum.KeyCode.ButtonY)
+			ContextActionService:BindActionAtPriority("FreecamGamepadTrigger", Trigger, false, INPUT_PRIORITY, Enum.KeyCode.ButtonR2, Enum.KeyCode.ButtonL2)
+			ContextActionService:BindActionAtPriority("FreecamGamepadThumbstick", Thumb, false, INPUT_PRIORITY, Enum.KeyCode.Thumbstick1, Enum.KeyCode.Thumbstick2)
+			ContextActionService:BindActionAtPriority("FreecamTouch", HandleTouch, false, INPUT_PRIORITY, Enum.UserInputType.Touch)
+		end
+
+		function Input.StopCapture()
+			navSpeed = 1
+			Zero(gamepad)
+			Zero(keyboard)
+			Zero(mouse)
+			Zero(touch)
+			activeTouches = {}
+			lastPinchDist = 0
+
+			ContextActionService:UnbindAction("FreecamKeyboard")
+			ContextActionService:UnbindAction("FreecamMousePan")
+			ContextActionService:UnbindAction("FreecamMouseWheel")
+			ContextActionService:UnbindAction("FreecamGamepadButton")
+			ContextActionService:UnbindAction("FreecamGamepadTrigger")
+			ContextActionService:UnbindAction("FreecamGamepadThumbstick")
+			ContextActionService:UnbindAction("FreecamTouch")
+		end
+	end
+end
+
+local function GetFocusDistance(cameraFrame)
+	local znear = 0.1
+	local viewport = Camera.ViewportSize
+	local projy = 2 * tan(rad(cameraFov) / 2)
+	local projx = viewport.x / viewport.y * projy
+	local fx = cameraFrame.RightVector
+	local fy = cameraFrame.UpVector
+	local fz = cameraFrame.LookVector
+
+	local minVect = Vector3.new()
+	local minDist = 512
+
+	for x = 0, 1, 0.5 do
+		for y = 0, 1, 0.5 do
+			local cx = (x - 0.5) * projx
+			local cy = (y - 0.5) * projy
+			local offset = fx * cx - fy * cy + fz
+			local origin = cameraFrame.Position + offset * znear
+			local _, hit = Workspace:FindPartOnRay(Ray.new(origin, offset.Unit * minDist))
+			local dist = (hit - origin).Magnitude
+			if minDist > dist then
+				minDist = dist
+				minVect = offset.Unit
+			end
+		end
+	end
+
+	return fz:Dot(minVect) * minDist
+end
+
+local function StepFreecam(dt)
+	local vel = velSpring:Update(dt, Input.Vel(dt))
+	local pan = panSpring:Update(dt, Input.Pan(dt))
+	local fov = fovSpring:Update(dt, Input.Fov(dt))
+
+	local zoomFactor = sqrt(tan(rad(70 / 2)) / tan(rad(cameraFov / 2)))
+
+	cameraFov = clamp(cameraFov + fov * FOV_GAIN * (dt / zoomFactor), 1, 120)
+	cameraRot = cameraRot + pan * PAN_GAIN * (dt / zoomFactor)
+	cameraRot = Vector2.new(clamp(cameraRot.x, -PITCH_LIMIT, PITCH_LIMIT), cameraRot.y % (2 * pi))
+
+	local cameraCFrame = CFrame.new(cameraPos) * CFrame.fromEulerAnglesYXZ(cameraRot.x, cameraRot.y, 0) * CFrame.new(vel * NAV_GAIN * dt)
+	cameraPos = cameraCFrame.Position
+
+	Camera.CFrame = cameraCFrame
+	Camera.Focus = cameraCFrame * CFrame.new(0, 0, -GetFocusDistance(cameraCFrame))
+	Camera.FieldOfView = cameraFov
+end
+
+function Freecam:Start(onEnded)
+	if isActive then return end
+	isActive = true
+
+	if onEnded and typeof(onEnded) == "function" then
+		onEndedCallback = onEnded
+	end
+
+	local cameraCFrame = Camera.CFrame
+	cameraRot = Vector2.new(cameraCFrame:ToEulerAnglesYXZ())
+	cameraPos = cameraCFrame.Position
+	cameraFov = Camera.FieldOfView
+
+	velSpring:Reset(Vector3.new())
+	panSpring:Reset(Vector2.new())
+	fovSpring:Reset(0)
+
+	PlayerState.Push()
+	RunService:BindToRenderStep("Freecam", Enum.RenderPriority.Camera.Value + 1, StepFreecam)
+	Input.StartCapture()
+end
+
+function Freecam:Stop()
+	if not isActive then return end
+	isActive = false
+
+	Input.StopCapture()
+	RunService:UnbindFromRenderStep("Freecam")
+	PlayerState.Pop()
+
+	if onEndedCallback then
+		onEndedCallback()
+		onEndedCallback = nil
+	end
+end
+
+return Freecam

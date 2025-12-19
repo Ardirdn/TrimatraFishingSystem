@@ -151,6 +151,7 @@ local baitLineAttachment1 = nil
 local baitLinePart = nil
 local isPulling = false
 local pullConnection = nil
+local pullingInputConn = nil -- ✅ NEW: Track input connection during pulling for proper cleanup
 
 local BAIT_LINE_LENGTH = 5
 local Cooldown = 1
@@ -164,6 +165,10 @@ local isAnyUIOpen = false
 -- ✅ NEW: New fish reward tracking for AFK mode
 local isNewFishUIVisible = false
 local lastNewFishTime = 0
+
+-- ✅ NEW: Saved rotation for AFK mode - reset after pulling
+local savedPlayerRotation = nil -- CFrame Y-rotation yang disimpan sebelum throw
+local afkSavedRotation = nil -- Rotasi yang disimpan saat AFK mode aktif
 
 -- Dynamic LineStyle (updated when rod changes)
 local LineStyle = {
@@ -800,6 +805,79 @@ local function cleanupFishing()
 end
 
 
+-- ✅ NEW: Restore player rotation after pulling (for AFK mode)
+local function restorePlayerRotation()
+	if not savedPlayerRotation then return end
+	if not HRP then return end
+	
+	-- Smooth tween back to saved rotation
+	local currentPos = HRP.Position
+	local lookVector = savedPlayerRotation.LookVector
+	local targetCFrame = CFrame.new(currentPos) * CFrame.Angles(0, math.atan2(-lookVector.X, -lookVector.Z), 0)
+	
+	local tween = TweenService:Create(
+		HRP,
+		TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+		{CFrame = CFrame.new(currentPos, currentPos + savedPlayerRotation.LookVector * Vector3.new(1, 0, 1))}
+	)
+	tween:Play()
+	
+	print("🔄 [FISHING] Player rotation restored to saved direction")
+end
+
+-- ✅ NEW: Comprehensive pulling state cleanup (fixes frozen UI bug)
+local function cleanupPullingState()
+	-- Hide pulling UI
+	if pullFrame then
+		pullFrame.Visible = false
+	end
+	if timerBar then
+		timerBar.Visible = false
+	end
+	
+	-- Stop camera effects
+	stopCameraShake()
+	stopPullCamera()
+	
+	-- Stop pulling animation
+	if pullingAnimation and pullingAnimation.IsPlaying then
+		pullingAnimation:Stop()
+	end
+	
+	-- Stop pulling sound
+	if currentPullingSound then
+		SoundConfig.StopSound(currentPullingSound)
+		currentPullingSound = nil
+	end
+	
+	-- Restore player movement
+	if Humanoid then
+		Humanoid.WalkSpeed = 16
+		Humanoid.JumpPower = 50
+		print("✅ [FISHING] Player movement restored")
+	end
+	
+	-- Disconnect input connection (module-level variable)
+	if pullingInputConn then
+		pullingInputConn:Disconnect()
+		pullingInputConn = nil
+	end
+	
+	-- Disconnect beam update connection
+	if beamUpdateConnection then
+		beamUpdateConnection:Disconnect()
+		beamUpdateConnection = nil
+	end
+	
+	-- Reset state flags
+	isPulling = false
+	isFishing = false
+	
+	-- Restore player rotation (for AFK mode)
+	if _G.afkMode and savedPlayerRotation then
+		restorePlayerRotation()
+	end
+end
 
 local function calculateParabolicPosition(startPos, targetPos, height, alpha)
 	if LineRenderer and LineRenderer.CalculateParabolicPosition then
@@ -1073,8 +1151,12 @@ local function startPulling()
 	pullFrame.Visible = true
 	startTapPull()
 
-	local inputConn
-	inputConn = UserInputService.InputBegan:Connect(function(input, processed)
+	-- ✅ Use module-level variable for proper cleanup on line snap
+	if pullingInputConn then
+		pullingInputConn:Disconnect()
+		pullingInputConn = nil
+	end
+	pullingInputConn = UserInputService.InputBegan:Connect(function(input, processed)
 		if not isPulling or processed then return end
 		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 			progress = math.min(progress + tapIncrease, maxScale)
@@ -1230,10 +1312,15 @@ local function startPulling()
 				Humanoid.JumpPower = 50
 				print("✅ [FISHING] Player movement restored (pull failed)")
 			end
+			
+			-- ✅ Restore player rotation (for AFK mode)
+			if _G.afkMode and savedPlayerRotation then
+				restorePlayerRotation()
+			end
 
-			if inputConn then
-				inputConn:Disconnect()
-				inputConn = nil
+			if pullingInputConn then
+				pullingInputConn:Disconnect()
+				pullingInputConn = nil
 			end
 
 			pullFrame.Visible = false
@@ -1287,13 +1374,19 @@ local function startPulling()
 				Humanoid.JumpPower = 50
 				print("✅ [FISHING] Player movement restored (pull success)")
 			end
+			
+			-- ✅ Restore player rotation (for AFK mode)
+			if _G.afkMode and savedPlayerRotation then
+				restorePlayerRotation()
+			end
 
-			if inputConn then
-				inputConn:Disconnect()
-				inputConn = nil
+			if pullingInputConn then
+				pullingInputConn:Disconnect()
+				pullingInputConn = nil
 			end
 
 			pullFrame.Visible = false
+			timerBar.Visible = false
 
 			if pullConnection then
 				pullConnection:Disconnect()
@@ -1337,13 +1430,13 @@ local function startPulling()
 			if horizontalDistance > maxAllowedDistance then
 				warn("⚠️ Line snapped during pull! Distance:", math.floor(horizontalDistance))
 
+				-- ✅ FIX: Use comprehensive cleanup (fixes frozen UI bug)
 				if pullConnection then
 					pullConnection:Disconnect()
 					pullConnection = nil
 				end
-
-				isPulling = false
-				isFishing = false
+				
+				cleanupPullingState() -- ✅ This cleans up UI, sound, camera, animation, movement
 				retrieveFloater()
 				return
 			end
@@ -1415,27 +1508,9 @@ local function startPulling()
 				pullConnection = nil
 			end
 
-			-- Jangan disconnect beamUpdateConnection dulu supaya animasi tali tetap update
-
-			if pullingAnimation and pullingAnimation.IsPlaying then
-				pullingAnimation:Stop()
-			end
-
-			if catchAnimation then
-				-- Jangan play animasi catch, cukup stop pulling animasi.
-				-- Jika ingin diputar, bisa ditambahkan manual di sini.
-			end
-
-			if beamUpdateConnection then
-				beamUpdateConnection:Disconnect()
-				beamUpdateConnection = nil
-			end
-
-			isPulling = false
-			isFishing = false
-
-			pullFrame.Visible = false
-
+			-- ✅ FIX: Use comprehensive cleanup
+			cleanupPullingState()
+			
 			retrieveFloater()
 
 			print("🎣 Cleanup sequence complete")
@@ -1596,6 +1671,12 @@ local function throwFloater()
 	end
 	
 	isThrowing = true
+	
+	-- ✅ FIX AFK ROTATION: Save player rotation before throw (for AFK mode)
+	if _G.afkMode and HRP then
+		savedPlayerRotation = HRP.CFrame
+		print("💾 [AFK] Saved player rotation before throw")
+	end
 
 	if not currentConfig or not currentConfig.ThrowHeight then
 		warn("Config/ThrowHeight alat pancing belum lengkap!")
@@ -1798,6 +1879,13 @@ _G.afkLoopTask = nil
 
 local function startAfkLoop()
 	if _G.afkLoopTask then return end -- jangan run double loop
+	
+	-- ✅ FIX: Disable AutoRotate to prevent drift
+	if Humanoid then
+		Humanoid.AutoRotate = false
+		print("🔒 [AFK] AutoRotate disabled")
+	end
+	
 	_G.afkLoopTask = task.spawn(function()
 		print("[AFK] Loop started")
 		while _G.afkMode do
@@ -1890,6 +1978,12 @@ end
 local function stopAfkLoop()
 	afkMode = false
 	_G.afkMode = false
+	
+	-- ✅ FIX: Re-enable AutoRotate
+	if Humanoid then
+		Humanoid.AutoRotate = true
+		print("🔓 [AFK] AutoRotate re-enabled")
+	end
 end
 
 -- Expose functions globally
@@ -1903,9 +1997,22 @@ local function toggleAfkMode()
 	
 	if afkMode then
 		print("🤖 [AFK] AFK Mode ENABLED")
+		
+		-- ✅ Save player rotation when AFK mode starts
+		if HRP then
+			afkSavedRotation = HRP.CFrame
+			savedPlayerRotation = HRP.CFrame
+			print("💾 [AFK] Initial player rotation saved")
+		end
+		
 		startAfkLoop()
 	else
 		print("🤖 [AFK] AFK Mode DISABLED")
+		
+		-- ✅ Clear saved rotations
+		afkSavedRotation = nil
+		savedPlayerRotation = nil
+		
 		stopAfkLoop()
 	end
 	

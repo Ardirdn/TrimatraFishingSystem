@@ -17,7 +17,11 @@ local Icon = require(ReplicatedStorage:WaitForChild("Icon"))
 local ShopConfig = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("ShopConfig"))
 
 
-local remoteFolder = ReplicatedStorage:WaitForChild("ShopRemotes")
+local remoteFolder = ReplicatedStorage:WaitForChild("ShopRemotes", 15) -- Wait up to 15 seconds
+if not remoteFolder then
+	warn("⚠️ [SHOP CLIENT] ShopRemotes folder not found! Server may not be loaded.")
+	return
+end
 local getShopDataEvent = remoteFolder:WaitForChild("GetShopData")
 local purchaseItemEvent = remoteFolder:WaitForChild("PurchaseItem")
 local purchaseGamepassEvent = remoteFolder:WaitForChild("PurchaseGamepass")

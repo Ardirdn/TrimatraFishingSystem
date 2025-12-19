@@ -3,6 +3,9 @@
     Place in StarterPlayerScripts/RedeemClient
 ]]
 
+-- ⚠️ SET TO false TO TEMPORARILY DISABLE THIS FEATURE
+local FEATURE_ENABLED = false
+
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
@@ -11,15 +14,12 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
--- No longer using TopbarPlus
+local Icon = require(ReplicatedStorage:WaitForChild("Icon"))
 local RedeemConfig = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("RedeemConfig"))
 local TitleConfig = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("TitleConfig"))
+local PanelManager = require(script.Parent:WaitForChild("PanelManager"))
 
-local remoteFolder = ReplicatedStorage:WaitForChild("RedeemRemotes", 15) -- Wait up to 15 seconds
-if not remoteFolder then
-	warn("⚠️ [REDEEM CLIENT] RedeemRemotes folder not found! Server may not be loaded.")
-	return
-end
+local remoteFolder = ReplicatedStorage:WaitForChild("RedeemRemotes")
 local createCodeEvent = remoteFolder:WaitForChild("CreateCode")
 local redeemCodeEvent = remoteFolder:WaitForChild("RedeemCode")
 local getRewardOptionsFunc = remoteFolder:WaitForChild("GetRewardOptions")
@@ -56,10 +56,10 @@ screenGui.Name = "RedeemGui"
 screenGui.ResetOnSpawn = false
 screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 screenGui.DisplayOrder = 50
-screenGui.Enabled = true -- ✅ Always enabled so button is visible
+screenGui.Enabled = false
 screenGui.Parent = playerGui
 
--- Main Panel (hidden by default, shown when button clicked)
+-- Main Panel
 local mainPanel = Instance.new("Frame")
 mainPanel.Name = "MainPanel"
 mainPanel.Size = UDim2.new(0.5, 0, 0.85, 0)
@@ -67,7 +67,7 @@ mainPanel.Position = UDim2.new(0.5, 0, 1.5, 0)
 mainPanel.AnchorPoint = Vector2.new(0.5, 0.5)
 mainPanel.BackgroundColor3 = COLORS.Background
 mainPanel.BorderSizePixel = 0
-mainPanel.Visible = false -- ✅ Panel hidden, not entire GUI
+mainPanel.Visible = false
 mainPanel.Parent = screenGui
 
 createCorner(15).Parent = mainPanel
@@ -632,7 +632,8 @@ end
 
 
 local function showPanel()
-	-- screenGui always enabled, just show panel
+	PanelManager:Open("RedeemPanel") -- This closes other panels first
+	screenGui.Enabled = true
 	mainPanel.Visible = true
 	mainPanel.Position = UDim2.new(0.5, 0, 1.5, 0)
 
@@ -651,9 +652,13 @@ local function hidePanel()
 	slideDown:Play()
 	slideDown.Completed:Connect(function()
 		mainPanel.Visible = false
-		-- Don't disable screenGui, button needs to stay visible
+		screenGui.Enabled = false
 	end)
+	PanelManager:Close("RedeemPanel")
 end
+
+-- Register with PanelManager
+PanelManager:Register("RedeemPanel", hidePanel)
 
 -- ==================== EVENT CONNECTIONS ====================
 
@@ -786,89 +791,23 @@ createCodeButton.MouseButton1Click:Connect(function()
 	selectedReward = nil
 end)
 
--- ==================== USE HUD BUTTON TEMPLATE (RIGHT SIDE) ====================
-
-local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
-
-local hudGui = playerGui:WaitForChild("HUD", 10)
-local rightFrame = hudGui and hudGui:FindFirstChild("Right")
-local buttonTemplate = rightFrame and rightFrame:FindFirstChild("ButtonTemplate")
-
-local floatingButton = nil
-local isOpen = false
-
-if buttonTemplate then
-	-- ✅ Hide the original template
-	buttonTemplate.Visible = false
-	
-	-- Clone the template
-	local buttonContainer = buttonTemplate:Clone()
-	buttonContainer.Name = "RedeemButton"
-	buttonContainer.Visible = true
-	buttonContainer.LayoutOrder = 1 -- First button on right
-	buttonContainer.BackgroundTransparency = 1 -- ✅ Transparent container
-	buttonContainer.Parent = rightFrame
-	
-	-- Get references
-	floatingButton = buttonContainer:FindFirstChild("ImageButton")
-	local buttonText = buttonContainer:FindFirstChild("TextLabel")
-	
-	-- Set button properties
-	if floatingButton then
-		floatingButton.Image = "rbxassetid://97926706883827" -- Redeem icon
-		floatingButton.BackgroundTransparency = 1 -- ✅ Transparent button
-	end
-	
-	if buttonText then
-		buttonText.Text = "Redeem"
-	end
-	
-	print("✅ [REDEEM] Using HUD template button (Right)")
-else
-	-- Fallback: Create button manually if template not found
-	warn("[REDEEM] HUD template not found, creating button manually")
-	
-	floatingButton = Instance.new("ImageButton")
-	floatingButton.Name = "RedeemButton"
-	floatingButton.Size = UDim2.new(0.1, 0, 0.1, 0)
-	floatingButton.Position = UDim2.new(0.99, 0, 0.4, 0)
-	floatingButton.AnchorPoint = Vector2.new(1, 0)
-	floatingButton.BackgroundTransparency = 1
-	floatingButton.BorderSizePixel = 0
-	floatingButton.Image = "rbxassetid://94928289017301"
-	floatingButton.ScaleType = Enum.ScaleType.Fit
-	floatingButton.Parent = screenGui
-	
-	local buttonText = Instance.new("TextLabel")
-	buttonText.Size = UDim2.new(1, 0, 0.3, 0)
-	buttonText.Position = UDim2.new(0, 0, 1, 2)
-	buttonText.BackgroundTransparency = 1
-	buttonText.Font = Enum.Font.GothamBold
-	buttonText.Text = "Redeem"
-	buttonText.TextColor3 = Color3.fromRGB(255, 255, 255)
-	buttonText.TextScaled = true
-	buttonText.Parent = floatingButton
-end
-
--- Toggle panel on click
-if floatingButton then
-	floatingButton.MouseButton1Click:Connect(function()
-		if isOpen then
-			hidePanel()
-			isOpen = false
-		else
+-- ==================== TOPBAR ICON ====================
+if FEATURE_ENABLED then
+	local redeemIcon = Icon.new()
+		:setImage("rbxassetid://11419703997")
+		:setLabel("Redeem")
+		:bindEvent("selected", function()
 			showPanel()
-			isOpen = true
-		end
-	end)
+		end)
+		:bindEvent("deselected", function()
+			hidePanel()
+		end)
 end
-
--- Also close when close button is pressed
-closeBtn.MouseButton1Click:Connect(function()
-	isOpen = false
-end)
 
 -- ==================== INITIALIZATION ====================
-checkAdmin()
-
-print("✅ [REDEEM CLIENT] System loaded (Floating Button)")
+if FEATURE_ENABLED then
+	checkAdmin()
+	print("✅ [REDEEM CLIENT] System loaded")
+else
+	print("⚠️ [REDEEM CLIENT] Feature temporarily disabled")
+end

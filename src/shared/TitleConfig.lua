@@ -274,7 +274,7 @@ TitleConfig.ZoneColors = {
 
 -- ==================== ADMIN IDS ====================
 -- Primary Admin: Full access to all features
--- Secondary Admin: Limited access (cannot use Notifications & Events)
+-- Secondary Admin: Limited access (cannot use Notifications)
 -- Both have the same "Admin" title
 
 TitleConfig.PrimaryAdminIds = {

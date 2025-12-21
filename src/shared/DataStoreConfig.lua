@@ -14,6 +14,8 @@ DataStoreConfig.PlayerData = "PlayerData_v3"
 DataStoreConfig.Leaderboards = {
 	FishCaught = "Leaderboard_FishCaught_v1",  -- Total fish caught
 	Donation = "Leaderboard_Donation_v1",       -- Total donation amount
+	Playtime = "Leaderboard_Playtime_v1",       -- Total playtime (seconds)
+	Richest = "Leaderboard_Richest_v1",         -- Total money/wealth
 }
 
 -- ==================== LEADERBOARD UPDATE SETTINGS ====================

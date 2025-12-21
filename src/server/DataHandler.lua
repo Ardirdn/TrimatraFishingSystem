@@ -64,10 +64,6 @@ local function getDefaultData(userId)
 		TitleSource = "fisherman", -- "fisherman", "special", "admin"
 		SpecialTitle = nil, -- Untuk VIP, VVIP, Donatur, Admin, dll
 
-		-- Summit & Checkpoint (NEW - dipindahkan dari checkpoint script)
-		TotalSummits = 0,
-		LastCheckpoint = 0,
-		BestSpeedrun = nil,
 		TotalPlaytime = 0,
 
 		-- Clan (future feature)

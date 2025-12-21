@@ -156,11 +156,13 @@ MarketplaceService.ProcessReceipt = function(receiptInfo)
 				})
 			end
 
-			-- Update donation leaderboard
+			-- Update donation leaderboard immediately
 			local DataStoreService = game:GetService("DataStoreService")
-			local DonationLeaderboard = DataStoreService:GetOrderedDataStore("DonationLeaderboard")
+			local DataStoreConfig = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("DataStoreConfig"))
+			local DonationLeaderboard = DataStoreService:GetOrderedDataStore(DataStoreConfig.Leaderboards.Donation)
 			pcall(function()
 				DonationLeaderboard:SetAsync(tostring(userId), totalDonations)
+				print("📊 [MARKETPLACE] Updated donation leaderboard for", player.Name, ":", totalDonations)
 			end)
 
 			task.spawn(function()
